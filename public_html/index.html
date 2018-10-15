@@ -1,0 +1,66 @@
+<html>
+<head>
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.5.17/dist/vue.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jdenticon@2.1.0"></script>
+  <script src="sodium.js"></script>
+<style>
+#log, #input {
+  position: fixed;
+  left: 0;
+  right: 0;
+}
+
+#log {
+  top: 0;
+  height: 100%;
+}
+
+#input {
+  bottom: 0;
+}
+
+#input input {
+  width: 100%;
+}
+
+svg {
+  position: relative;
+  top: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="app">
+  <div id="log">
+    <ul>
+      <li v-for="item in log_items">
+        <svg width="32" height="32" v-bind:data-jdenticon-value="item.from"></svg>
+        {{ item.message }}
+      </li>
+    </ul>
+  </div>
+  <div id="input">
+    <input v-model="input">
+  </div>
+</div>
+
+<script>
+  var app = new Vue({
+    el: '#app',
+    data: {
+      log_items: [{from:"george",message:"foo"},{from:"george",message:"bar"}],
+      input: "",
+    },
+    mounted: function () {
+      jdenticon.update("svg");
+    },
+    updated: function () {
+      jdenticon.update("svg");
+    },
+  })
+</script>
+
+</body>
+</html>
