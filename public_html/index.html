@@ -4,23 +4,35 @@
   <script src="https://cdn.jsdelivr.net/npm/jdenticon@2.1.0"></script>
   <script src="sodium.js"></script>
 <style>
-#log, #input {
-  position: fixed;
-  left: 0;
-  right: 0;
+#app {
+  height: 100%;
+  display: grid;
+  grid-template-columns: auto 20%;
+  grid-template-rows: 85% 15%;
 }
 
 #log {
-  top: 0;
-  height: 100%;
+  grid-column: 1;
+  grid-row: 1;
+
+  overflow-y: scroll;
+}
+
+#who {
+  grid-column: 2;
+  grid-row: 1;
+
+  overflow-y: scroll;
 }
 
 #input {
-  bottom: 0;
+  grid-column: 1 / span 2;
+  grid-row: 2;
+
+  border-top: 1px solid black;
 }
 
 #input input {
-  width: 100%;
 }
 
 svg {
@@ -37,29 +49,83 @@ svg {
     <ul>
       <li v-for="item in log_items">
         <svg width="32" height="32" v-bind:data-jdenticon-value="item.from"></svg>
+        <strong>{{ item.from }}:</strong>
         {{ item.message }}
       </li>
     </ul>
   </div>
+  <div id="who">
+    <h3>Users here:</h3>
+    <ul>
+      <li v-for="item in users">
+        <svg width="32" height="32" v-bind:data-jdenticon-value="item.keyid"></svg>
+        <strong>{{item.nickname}}</strong>
+      </li>
+    </ul>
+  </div>
   <div id="input">
+    <svg width="64" height="64" v-bind:data-jdenticon-value="keyid"></svg>
+    <strong>{{nickname}}:</strong>
     <input v-model="input">
   </div>
 </div>
 
 <script>
+function scrolldown() {
+  logdiv = document.getElementById("log");
+  logdiv.scrollTop = logdiv.scrollHeight;
+}
+</script>
+
+<script>
   var app = new Vue({
     el: '#app',
     data: {
-      log_items: [{from:"george",message:"foo"},{from:"george",message:"bar"}],
+      users: [
+        {keyid:"fred", nickname:"fred"},
+        {keyid:"george", nickname:"george"},
+      ],
+      log_items: [
+        {from:"fred",message:"foo"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+        {from:"george",message:"bar"},
+      ],
       input: "",
+      keyid: "GARBLEDINA",
+      nickname: "Octa9on",
     },
     mounted: function () {
       jdenticon.update("svg");
+      scrolldown();
     },
     updated: function () {
       jdenticon.update("svg");
+      scrolldown();
     },
-  })
+  });
 </script>
 
 </body>
