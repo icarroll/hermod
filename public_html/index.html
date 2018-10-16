@@ -12,16 +12,26 @@
         color: 1.0,
         grayscale: 0.0,
       },
-      backColor: "#00000000"
+      backColor: "#ffffff"
     };
   </script>
   <script src="sodium.js"></script>
+  <script src="zxcvbn.js"></script>
 
 <style>
 body {
 }
 
-#app {
+#login {
+  height: 100%;
+  display: grid;
+  grid-template-columns: auto;
+  grid-template-rows: auto;
+  align-items: center;
+  justify-items: center;
+}
+
+#chat {
   height: 100%;
   display: grid;
   grid-template-columns: auto 20%;
@@ -32,7 +42,6 @@ svg {
   position: relative;
   top: 10px;
 
-  background: white;
   border: 1px solid black;
 }
 
@@ -86,9 +95,27 @@ svg ~ p {
 </style>
 </head>
 
+<!--
 <body onclick="inputfocus()">
+-->
+<body>
 
 <div id="app">
+<div id="login">
+  <div>
+    <h1>Hermod chat</h1>
+    Username: <input id="id_salt" v-model="self_user.id_salt"> <br/>
+    Password: <input id="password" v-model="self_user.password"> <br/>
+    Your password would take {{crack_time}} to crack. <br/>
+    <button onclick="calculate()">Calculate your idkey</button>
+  </div>
+  <div id="calculate" style="display: none">
+    {{please_wait_msg}} <br/>
+    <svg width="96" height="96" v-bind:data-jdenticon-value="self_user.idkey"></svg>
+  </div
+</div>
+
+<div id="chat" style="display: none">
   <div id="log">
     <div v-for="item in log_items">
       <svg width="32" height="32" v-bind:data-jdenticon-value="item.idkey"></svg>
@@ -113,15 +140,31 @@ svg ~ p {
     <input id="input_text" v-model="input">
   </div>
 </div>
+</div>
 
 <script>
+function calculate() {
+  document.getElementById("calculate").style.display = "";
+  app.please_wait_msg = "Calculating, please wait...";
+
+console.log("starting hash");
+  seed = sodium.crypto_pwhash(32, app.self_user.password, sodium.crypto_generichash(16, app.self_user.id_salt), 256, 10000000, sodium.crypto_pwhash_ALG_ARGON2ID13)
+console.log("done with hash");
+  keypair = sodium.sign_seed_keypair(seed);
+console.log("created keypair");
+  app.privkey = keypair.privateKey;
+  app.idkey = keypair.publicKey;
+
+  app.please_wait_msg = "";
+}
+
 function scrolldown() {
   logdiv = document.getElementById("log");
   logdiv.scrollTop = logdiv.scrollHeight;
 }
 
 function inputfocus() {
-  document.getElementById("input_text").focus();
+  // document.getElementById("input_text").focus();
 }
 </script>
 
@@ -129,12 +172,16 @@ function inputfocus() {
   var app = new Vue({
     el: '#app',
     data: {
-      users: [],
-      log_items: [],
       self_user: {
+        id_salt: "",
+        password: "",
+        privkey: "",
         idkey: "",
         nickname: "",
       },
+      please_wait_msg: "",
+      users: [],
+      log_items: [],
       input: "",
     },
     mounted: function () {
@@ -146,6 +193,11 @@ function inputfocus() {
       jdenticon.update("svg");
       scrolldown();
       inputfocus();
+    },
+    computed: {
+      crack_time: function() {
+        return zxcvbn(this.self_user.password).crack_times_display.offline_slow_hashing_1e4_per_second;
+      },
     },
   });
 </script>
