@@ -2,13 +2,38 @@
 <head>
   <script src="https://cdn.jsdelivr.net/npm/vue@2.5.17/dist/vue.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jdenticon@2.1.0"></script>
+  <script>
+    window.jdenticon_config = {
+      lightness: {
+        color: [0.33, 0.67],
+        grayscale: [0.17, 0.67],
+      },
+      saturation: {
+        color: 1.0,
+        grayscale: 0.0,
+      },
+      backColor: "#00000000"
+    };
+  </script>
   <script src="sodium.js"></script>
+
 <style>
+body {
+}
+
 #app {
   height: 100%;
   display: grid;
   grid-template-columns: auto 20%;
   grid-template-rows: 85% 15%;
+}
+
+svg {
+  position: relative;
+  top: 10px;
+
+  background: white;
+  border: 1px solid black;
 }
 
 #log {
@@ -18,11 +43,34 @@
   overflow-y: scroll;
 }
 
+#log div {
+  background: #f7f7f7;
+  margin-right: 10px;
+}
+
+#log svg {
+  float: left;
+  top: 0px;
+}
+
+svg ~ p {
+  margin-left: 50px;
+}
+
 #who {
   grid-column: 2;
   grid-row: 1;
 
   overflow-y: scroll;
+
+  border-left: 1px solid black;
+  padding-left: 10px;
+}
+
+#who ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
 
 #input {
@@ -33,40 +81,36 @@
 }
 
 #input input {
-}
-
-svg {
-  position: relative;
-  top: 10px;
+  width: 80%;
 }
 </style>
 </head>
 
-<body>
+<body onclick="inputfocus()">
 
 <div id="app">
   <div id="log">
-    <ul>
-      <li v-for="item in log_items">
-        <svg width="32" height="32" v-bind:data-jdenticon-value="item.from"></svg>
-        <strong>{{ item.from }}:</strong>
-        {{ item.message }}
-      </li>
-    </ul>
+    <div v-for="item in log_items">
+      <svg width="32" height="32" v-bind:data-jdenticon-value="item.idkey"></svg>
+      <p>
+        <strong>{{item.nickname}}:</strong>
+        {{item.message}}
+      </p>
+    </div>
   </div>
   <div id="who">
     <h3>Users here:</h3>
     <ul>
       <li v-for="item in users">
-        <svg width="32" height="32" v-bind:data-jdenticon-value="item.keyid"></svg>
+        <svg width="32" height="32" v-bind:data-jdenticon-value="item.idkey"></svg>
         <strong>{{item.nickname}}</strong>
       </li>
     </ul>
   </div>
   <div id="input">
-    <svg width="64" height="64" v-bind:data-jdenticon-value="keyid"></svg>
-    <strong>{{nickname}}:</strong>
-    <input v-model="input">
+    <svg width="64" height="64" v-bind:data-jdenticon-value="self_user.idkey"></svg>
+    <strong>{{self_user.nickname}}:</strong>
+    <input id="input_text" v-model="input">
   </div>
 </div>
 
@@ -75,55 +119,33 @@ function scrolldown() {
   logdiv = document.getElementById("log");
   logdiv.scrollTop = logdiv.scrollHeight;
 }
+
+function inputfocus() {
+  document.getElementById("input_text").focus();
+}
 </script>
 
 <script>
   var app = new Vue({
     el: '#app',
     data: {
-      users: [
-        {keyid:"fred", nickname:"fred"},
-        {keyid:"george", nickname:"george"},
-      ],
-      log_items: [
-        {from:"fred",message:"foo"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-        {from:"george",message:"bar"},
-      ],
+      users: [],
+      log_items: [],
+      self_user: {
+        idkey: "",
+        nickname: "",
+      },
       input: "",
-      keyid: "GARBLEDINA",
-      nickname: "Octa9on",
     },
     mounted: function () {
       jdenticon.update("svg");
       scrolldown();
+      inputfocus();
     },
     updated: function () {
       jdenticon.update("svg");
       scrolldown();
+      inputfocus();
     },
   });
 </script>
