@@ -1,7 +1,7 @@
 <html>
 <head>
-  <script src="https://cdn.jsdelivr.net/npm/vue@2.5.17/dist/vue.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jdenticon@2.1.0"></script>
+  <script src="vue.min.js"></script>
+  <script src="jdenticon.min.js"></script>
   <script>
     window.jdenticon_config = {
       lightness: {
@@ -25,16 +25,24 @@ body {
 #login {
   height: 100%;
   display: grid;
-  grid-template-columns: auto;
-  grid-template-rows: auto;
-  align-items: center;
-  justify-items: center;
+  grid-template-columns: 1fr 2fr 1fr;
+  grid-template-rows: 1fr 2fr 2fr 1fr;
+}
+
+#unamepword {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+#calculate {
+  grid-column: 2;
+  grid-row: 3;
 }
 
 #chat {
   height: 100%;
   display: grid;
-  grid-template-columns: auto 20%;
+  grid-template-columns: 80% 20%;
   grid-template-rows: 85% 15%;
 }
 
@@ -55,6 +63,13 @@ svg {
 #log div {
   background: #f7f7f7;
   margin-right: 10px;
+}
+
+#log div::after {
+  /* clearfix hack */
+  content: "";
+  clear: both;
+  display: table;
 }
 
 #log svg {
@@ -88,24 +103,50 @@ svg ~ p {
 
   border-top: 1px solid black;
 }
-
-#input input {
-  width: 80%;
-}
 </style>
 
 <script>
 function calculate() {
   document.getElementById("calculate").style.display = "";
-  app.please_wait_msg = "Calculating, please wait...";
+
+  app.self_user.nickname = app.self_user.id_salt;
 
   seed = sodium.crypto_pwhash(32, app.self_user.password, sodium.crypto_generichash(16, app.self_user.id_salt), 12, 10000000, sodium.crypto_pwhash_ALG_ARGON2ID13)
   keypair = sodium.crypto_sign_seed_keypair(seed);
   app.self_user.privkey = keypair.privateKey;
   app.self_user.idkey = keypair.publicKey;
 
-  app.please_wait_msg = "";
-  jdenticon.update();
+  update_icons();
+  document.getElementById("nickname").focus();
+}
+
+function connect() {
+  document.getElementById("login").style.display = "none";
+  document.getElementById("chat").style.display = "";
+
+  // app.websocket = new WebSocket("ws://" + window.location.host + ":8192" + window.location.pathname.substring(0, window.location.pathname.lastIndexOf("/")) + "/chatsock");
+  // app.websocket = new WebSocket("ws://" + window.location.host + ":8192" + "/chatsock");
+  app.websocket = new WebSocket("ws://ada.cs.pdx.edu:8192/chatsock")
+  // TODO: handle connection failure
+
+  app.websocket.onmessage = function(e) {
+    var receive = JSON.parse(e.data);
+    var temp = atob(receive.idkey);
+    var decidkey = new Uint8Array(temp.length);
+    for (i=0; i<temp.length; i+=1) {decidkey[i] = temp.charCodeAt(i);}
+
+    app.log_items.push({idkey:decidkey, nickname:receive.nickname, message:receive.payload});
+    update_icons();
+    scrolldown();
+  }
+
+  inputfocus();
+}
+
+function update_icons() {
+  Vue.nextTick(function () {
+    jdenticon.update("svg");
+  });
 }
 
 function scrolldown() {
@@ -114,28 +155,29 @@ function scrolldown() {
 }
 
 function inputfocus() {
-  // document.getElementById("input_text").focus();
+  document.getElementById("input_text").focus();
 }
 </script>
 </head>
 
-<!--
-<body onclick="inputfocus()">
--->
 <body>
 
 <div id="app">
 <div id="login">
-  <div>
+  <div id="unamepword">
     <h1>Hermod chat</h1>
-    Username: <input id="id_salt" v-model="self_user.id_salt"> <br/>
-    Password: <input id="password" v-model="self_user.password"> <br/>
+    Username: <input id="id_salt" v-model="self_user.id_salt" @keyup.enter="document.getElementById('password').focus()"> <br/>
+    Password: <input id="password" v-model="self_user.password" @keyup.enter="document.getElementById('calculatebutton').click()"> <br/>
     Your password would take {{crack_time}} to crack. <br/>
-    <button onclick="calculate()">Calculate your idkey</button>
+    <button id="calculatebutton" onclick="calculate()">Calculate your IDKey</button>
   </div>
   <div id="calculate" style="display: none">
-    {{please_wait_msg}} <br/>
-    <svg width="128" height="128" v-bind:data-jdenticon-value="self_user.idkey"></svg>
+    <hr/>
+    Nickname: <input id="nickname" v-model="self_user.nickname" @keyup.enter="document.getElementById('connectbutton').click()"> <br/>
+    IDKey:
+    <svg width="128" height="128" v-bind:data-jdenticon-value="self_user.idkey"></svg> <br/>
+    <br/>
+    <button id="connectbutton" onclick="connect()">Connect with this nickname and IDKey</button>
   </div>
 </div>
 
@@ -158,10 +200,10 @@ function inputfocus() {
       </li>
     </ul>
   </div>
-  <div id="input">
+  <div id="input" style="display: grid; grid-template-columns: auto auto 1fr;">
     <svg width="64" height="64" v-bind:data-jdenticon-value="self_user.idkey"></svg>
     <strong>{{self_user.nickname}}:</strong>
-    <input id="input_text" v-model="input">
+    <textarea id="input_text" v-model="input" @keyup.enter="send"></textarea>
   </div>
 </div>
 </div>
@@ -170,6 +212,7 @@ function inputfocus() {
   var app = new Vue({
     el: '#app',
     data: {
+      websocket: null,
       self_user: {
         id_salt: "",
         password: "",
@@ -177,20 +220,18 @@ function inputfocus() {
         idkey: "",
         nickname: "",
       },
-      please_wait_msg: "",
       users: [],
       log_items: [],
       input: "",
+      send: function () {
+        var encidkey = btoa(String.fromCharCode(...app.self_user.idkey));
+        var obj = {idkey:encidkey, nickname:app.self_user.nickname, payload:app.input};
+        app.websocket.send(JSON.stringify(obj));
+        app.input = "";
+      },
     },
     mounted: function () {
-      jdenticon.update("svg");
-      scrolldown();
-      inputfocus();
-    },
-    updated: function () {
-      jdenticon.update("svg");
-      scrolldown();
-      inputfocus();
+      document.getElementById("id_salt").focus();
     },
     computed: {
       crack_time: function() {
