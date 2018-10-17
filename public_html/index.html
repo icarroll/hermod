@@ -93,6 +93,30 @@ svg ~ p {
   width: 80%;
 }
 </style>
+
+<script>
+function calculate() {
+  document.getElementById("calculate").style.display = "";
+  app.please_wait_msg = "Calculating, please wait...";
+
+  seed = sodium.crypto_pwhash(32, app.self_user.password, sodium.crypto_generichash(16, app.self_user.id_salt), 12, 10000000, sodium.crypto_pwhash_ALG_ARGON2ID13)
+  keypair = sodium.crypto_sign_seed_keypair(seed);
+  app.self_user.privkey = keypair.privateKey;
+  app.self_user.idkey = keypair.publicKey;
+
+  app.please_wait_msg = "";
+  jdenticon.update();
+}
+
+function scrolldown() {
+  logdiv = document.getElementById("log");
+  logdiv.scrollTop = logdiv.scrollHeight;
+}
+
+function inputfocus() {
+  // document.getElementById("input_text").focus();
+}
+</script>
 </head>
 
 <!--
@@ -111,8 +135,8 @@ svg ~ p {
   </div>
   <div id="calculate" style="display: none">
     {{please_wait_msg}} <br/>
-    <svg width="96" height="96" v-bind:data-jdenticon-value="self_user.idkey"></svg>
-  </div
+    <svg width="128" height="128" v-bind:data-jdenticon-value="self_user.idkey"></svg>
+  </div>
 </div>
 
 <div id="chat" style="display: none">
@@ -141,32 +165,6 @@ svg ~ p {
   </div>
 </div>
 </div>
-
-<script>
-function calculate() {
-  document.getElementById("calculate").style.display = "";
-  app.please_wait_msg = "Calculating, please wait...";
-
-console.log("starting hash");
-  seed = sodium.crypto_pwhash(32, app.self_user.password, sodium.crypto_generichash(16, app.self_user.id_salt), 256, 10000000, sodium.crypto_pwhash_ALG_ARGON2ID13)
-console.log("done with hash");
-  keypair = sodium.sign_seed_keypair(seed);
-console.log("created keypair");
-  app.privkey = keypair.privateKey;
-  app.idkey = keypair.publicKey;
-
-  app.please_wait_msg = "";
-}
-
-function scrolldown() {
-  logdiv = document.getElementById("log");
-  logdiv.scrollTop = logdiv.scrollHeight;
-}
-
-function inputfocus() {
-  // document.getElementById("input_text").focus();
-}
-</script>
 
 <script>
   var app = new Vue({
