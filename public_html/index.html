@@ -50,31 +50,39 @@ svg {
   border: 1px solid black;
 }
 
-#log {
+#logs {
   grid-column: 1;
   grid-row: 1;
 
+  display: flex;
+  flex-direction: row;
+}
+
+.chatlog {
+  height: 85%;
+  flex-basis: 0;
+  flex-grow: 1;
   overflow-y: scroll;
 }
 
-#log div {
-  background: #f7f7f7;
-  margin-right: 10px;
-}
-
-#log div::after {
+.chatlog div::after {
   /* clearfix hack */
   content: "";
   clear: both;
   display: table;
 }
 
-#log svg {
+.msg {
+  background: #f7f7f7;
+  margin-right: 10px;
+}
+
+.msg svg {
   float: left;
 }
 
 svg ~ p {
-  margin-left: 50px;
+  margin-left: 42px;
 }
 
 #who {
@@ -99,10 +107,19 @@ textarea {
 }
 
 #input {
+  padding-top: 10px;
   grid-column: 1 / span 2;
   grid-row: 2;
 
   border-top: 1px solid black;
+
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+}
+
+#input strong {
+  padding-left: 10px;
+  padding-right: 10px;
 }
 </style>
 
@@ -136,7 +153,7 @@ function connect() {
     var decidkey = new Uint8Array(temp.length);
     for (i=0; i<temp.length; i+=1) {decidkey[i] = temp.charCodeAt(i);}
 
-    app.log_items.push({idkey:decidkey, nickname:receive.nickname, message:receive.payload});
+    app.chatlogs[0].push({idkey:decidkey, nickname:receive.nickname, message:receive.payload});
     update_icons();
     scrolldown();
   }
@@ -151,8 +168,12 @@ function update_icons() {
 }
 
 function scrolldown() {
-  logdiv = document.getElementById("log");
-  logdiv.scrollTop = logdiv.scrollHeight;
+  Vue.nextTick(function () {
+    logdivs = document.getElementsByClassName("chatlog");
+    for (var i=0 ; i<logdivs.length ; i+=1) {
+      logdivs[i].scrollTop = logdivs[i].scrollHeight;
+    }
+  });
 }
 
 function inputfocus() {
@@ -183,13 +204,15 @@ function inputfocus() {
 </div>
 
 <div id="chat" style="display: none">
-  <div id="log">
-    <div v-for="item in log_items">
-      <svg width="32" height="32" v-bind:data-jdenticon-value="item.idkey"></svg>
-      <p>
-        <strong>{{item.nickname}}:</strong>
-        {{item.message}}
-      </p>
+  <div id="logs">
+    <div class="chatlog" v-for="chatlog in chatlogs">
+      <div class="msg" v-for="item in chatlog">
+        <svg width="32" height="32" v-bind:data-jdenticon-value="item.idkey"></svg>
+        <p>
+          <strong>{{item.nickname}}:</strong>
+          {{item.message}}
+        </p>
+      </div>
     </div>
   </div>
   <div id="who">
@@ -201,7 +224,7 @@ function inputfocus() {
       </li>
     </ul>
   </div>
-  <div id="input" style="display: grid; grid-template-columns: auto auto 1fr;">
+  <div id="input">
     <svg width="64" height="64" v-bind:data-jdenticon-value="self_user.idkey"></svg>
     <strong>{{self_user.nickname}}:</strong>
     <textarea id="input_text" v-model="input" @keyup.enter="send"></textarea>
@@ -222,7 +245,8 @@ function inputfocus() {
         nickname: "",
       },
       users: [],
-      log_items: [],
+      chatchannels: ["", "blab"],
+      chatlogs: [[],[]],
       input: "",
       send: function () {
         var encidkey = btoa(String.fromCharCode(...app.self_user.idkey));
