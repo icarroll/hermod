@@ -1,6 +1,7 @@
 <html>
 <head>
-  <script src="vue.min.js"></script>
+  <!-- <script src="vue.min.js"></script> -->
+  <script src="vue.js"></script>
   <script src="jdenticon.min.js"></script>
   <script>
     window.jdenticon_config = {
@@ -19,7 +20,24 @@
   <script src="zxcvbn.js"></script>
 
 <style>
-body {
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]:after {
+  visibility: hidden;
+  z-index: 1;
+  position: absolute;
+  content: attr(data-tooltip);
+  width: auto;
+  max-width: min-content;
+  height: auto;
+  background-color: white;
+  border: 1px solid black;
+}
+
+[data-tooltip]:hover:after {
+  visibility: visible;
 }
 
 #login {
@@ -58,8 +76,26 @@ svg {
   flex-direction: row;
 }
 
+.channel {
+  flex-basis: 0;
+  flex-grow: 1;
+  border-right: 1px solid black;
+
+  display: flex;
+  flex-direction: column;
+}
+
+.channelname {
+  flex-basis: auto;
+  flex-grow: 0;
+  border-bottom: 1px solid black;
+}
+
+.activechannel h2 {
+  border-bottom: 5px solid blue;
+}
+
 .chatlog {
-  height: 85%;
   flex-basis: 0;
   flex-grow: 1;
   overflow-y: scroll;
@@ -91,7 +127,6 @@ svg ~ p {
 
   overflow-y: scroll;
 
-  border-left: 1px solid black;
   padding-left: 10px;
 }
 
@@ -146,6 +181,9 @@ function connect() {
   // app.websocket = new WebSocket("ws://" + window.location.host + ":8192" + "/chatsock");
   app.websocket = new WebSocket("ws://ada.cs.pdx.edu:8192/chatsock")
   // TODO: handle connection failure
+  // TODO: handle slow connection
+  // TODO: don't enable input box until connected?
+  // TODO: don't erase input box until message sent?
 
   app.websocket.onmessage = function(e) {
     var receive = JSON.parse(e.data);
@@ -153,12 +191,32 @@ function connect() {
     var decidkey = new Uint8Array(temp.length);
     for (i=0; i<temp.length; i+=1) {decidkey[i] = temp.charCodeAt(i);}
 
-    app.chatlogs[0].push({idkey:decidkey, nickname:receive.nickname, message:receive.payload});
+    channel = receive.channel;
+    item = {idkey:decidkey, nickname:receive.nickname, message:receive.message};
+    post_message(channel, item)
     update_icons();
     scrolldown();
   }
 
   inputfocus();
+}
+
+function join_channel(channel) {
+  app.channelnames.push(channel);
+  app.chatlogs.push([]);
+}
+
+function leave_channel(channel) {
+  ix = app.channelnames.indexOf(channel);
+  if (ix != -1) {
+    app.chatlogs.splice(ix, 1);
+    app.channelnames.splice(ix, 1);
+  }
+}
+
+function post_message(channel, item) {
+  ix = app.channelnames.indexOf(channel);
+  if (ix != -1) {app.chatlogs[ix].push(item);}
 }
 
 function update_icons() {
@@ -205,13 +263,19 @@ function inputfocus() {
 
 <div id="chat" style="display: none">
   <div id="logs">
-    <div class="chatlog" v-for="chatlog in chatlogs">
-      <div class="msg" v-for="item in chatlog">
-        <svg width="32" height="32" v-bind:data-jdenticon-value="item.idkey"></svg>
-        <p>
-          <strong>{{item.nickname}}:</strong>
-          {{item.message}}
-        </p>
+    <div class="channel" v-for="(chatlog,ix) in chatlogs" v-on:click="focuschannel=channelnames[ix] ; inputfocus()" v-bind:class="{activechannel: focuschannel===channelnames[ix]}">
+      <div v-if="channelnames[ix]===''" data-tooltip="CC 3.0 BY - Icon by Freepik https://www.flaticon.com/authors/freepik">
+        <object data="home.svg" width=32 height=32></object>
+      </div>
+      <h2 class="channelname">{{channelnames[ix]}}</h2>
+      <div class="chatlog">
+        <div class="msg" v-for="item in chatlog">
+          <svg width="32" height="32" v-bind:data-jdenticon-value="item.idkey"></svg>
+          <p>
+            <strong>{{item.nickname}}:</strong>
+            {{item.message}}
+          </p>
+        </div>
       </div>
     </div>
   </div>
@@ -245,12 +309,13 @@ function inputfocus() {
         nickname: "",
       },
       users: [],
-      chatchannels: ["", "blab"],
-      chatlogs: [[],[]],
+      channelnames: [""],
+      focuschannel: "",
+      chatlogs: [[]],
       input: "",
       send: function () {
         var encidkey = btoa(String.fromCharCode(...app.self_user.idkey));
-        var obj = {idkey:encidkey, nickname:app.self_user.nickname, payload:app.input};
+        var obj = {idkey:encidkey, nickname:app.self_user.nickname, channel:app.focuschannel, message:app.input};
         app.websocket.send(JSON.stringify(obj));
         app.input = "";
       },
