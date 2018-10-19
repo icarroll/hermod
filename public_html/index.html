@@ -72,6 +72,16 @@
   grid-template-rows: 85% 15%;
 }
 
+.homebutton {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: calc(20% + 32px);
+  width: 32px;
+  height: 32px;
+  font-weight: bold;
+}
+
 .newbutton {
   position: absolute;
   z-index: 2;
@@ -121,8 +131,7 @@ svg {
 }
 
 .leavebutton {
-  width: 32px;
-  height: 32px;
+  padding: 0;
 }
 
 .chatlog {
@@ -248,6 +257,8 @@ function join_channel(channel) {
       app.chatlogs.push([]);
     }
   }
+
+  app.focuschannel = channel;
 }
 
 function leave_channel(channel) {
@@ -311,16 +322,17 @@ function inputfocus() {
 </div>
 
 <div id="chat" v-bind:style="{display: state==='chat' ? '' : 'none'}">
-  <button class="newbutton">&#x1f4dd;</button>
-  <div class="newdiv" v-bind:style="{display: newdiv_state==='show' ? '' : 'none'}"><input placeholder="New channel name"></input></div>
+  <button class="homebutton" v-on:click="join('')">&#x1f3e0;</button>
+  <button class="newbutton" v-on:click="shownewdiv()">&#x1f4dd;</button>
+  <div class="newdiv" v-bind:style="{display: newdiv_state==='show' ? '' : 'none'}"><input ref="newname" v-model="newchannelname" placeholder="New channel name" @keyup.enter="newchannel()"></input></div>
   <div id="logs">
     <div class="channel" v-for="(chatlog,ix) in chatlogs" v-on:click="changechannel(ix)" v-bind:class="{activechannel: focuschannel===channelnames[ix]}">
       <div class="channelname">
         <button class="leavebutton" v-on:click="leave(channelnames[ix])">&#x274c;</button>
-        <div style="width: min-content;" v-if="channelnames[ix]===''" data-tooltip="CC 3.0 BY - Icon by Freepik https://www.flaticon.com/authors/freepik">
+        <span v-if="channelnames[ix]===''" data-tooltip="CC 3.0 BY - Icon by Freepik https://www.flaticon.com/authors/freepik">
           <object data="home.svg" width=32 height=32></object>
-        </div>
-        {{channelnames[ix]}}
+        </span>
+        <strong>{{channelnames[ix]}}</strong>
       </div>
       <div class="chatlog">
         <div class="msg" v-for="item in chatlog">
@@ -369,6 +381,7 @@ function inputfocus() {
       channelnames: [""],
       focuschannel: "",
       chatlogs: [[]],
+      newchannelname: "",
       input: "",
       send: function () {
         var encidkey = btoa(String.fromCharCode(...this.self_user.idkey));
@@ -380,8 +393,20 @@ function inputfocus() {
         this.focuschannel = this.channelnames[ix];
         inputfocus();
       },
+      join: function (channel) {
+        join_channel(channel);
+      },
       leave: function (channel) {
         leave_channel(channel);
+      },
+      shownewdiv: function() {
+        this.newdiv_state = "show";
+        this.$refs.newname.focus();
+      },
+      newchannel: function() {
+        this.join(this.newchannelname);
+        this.newchannelname = "";
+        this.newdiv_state = "hide";
       },
     },
     mounted: function () {
