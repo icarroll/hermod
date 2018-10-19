@@ -40,14 +40,22 @@
   visibility: visible;
 }
 
-#login {
+.visible {
+  display: '';
+}
+
+.invisible {
+  display: none;
+}
+
+.login {
   height: 100%;
   display: grid;
   grid-template-columns: 1fr 2fr 1fr;
   grid-template-rows: 1fr 2fr 2fr 1fr;
 }
 
-#unamepword {
+.unamepword {
   grid-column: 2;
   grid-row: 2;
 }
@@ -170,11 +178,11 @@ function calculate() {
   app.self_user.idkey = keypair.publicKey;
 
   update_icons();
-  document.getElementById("nickname").focus();
+  app.$refs.nickname.focus();
 }
 
 function connect() {
-  document.getElementById("login").style.display = "none";
+  app.state="chat";
   document.getElementById("chat").style.display = "";
 
   // app.websocket = new WebSocket("ws://" + window.location.host + ":8192" + window.location.pathname.substring(0, window.location.pathname.lastIndexOf("/")) + "/chatsock");
@@ -191,19 +199,28 @@ function connect() {
     var decidkey = new Uint8Array(temp.length);
     for (i=0; i<temp.length; i+=1) {decidkey[i] = temp.charCodeAt(i);}
 
-    channel = receive.channel;
     item = {idkey:decidkey, nickname:receive.nickname, message:receive.message};
-    post_message(channel, item)
+    post_message(receive.channel, item)
     update_icons();
     scrolldown();
   }
 
+  window.onbeforeunload = function() {return true;};
   inputfocus();
 }
 
 function join_channel(channel) {
-  app.channelnames.push(channel);
-  app.chatlogs.push([]);
+  ix = app.channelnames.indexOf(channel);
+  if (ix == -1) {
+    if (channel === "") {
+      app.channelnames.unshift(channel);
+      app.chatlogs.unshift([]);
+    }
+    else {
+      app.channelnames.push(channel);
+      app.chatlogs.push([]);
+    }
+  }
 }
 
 function leave_channel(channel) {
@@ -211,6 +228,9 @@ function leave_channel(channel) {
   if (ix != -1) {
     app.chatlogs.splice(ix, 1);
     app.channelnames.splice(ix, 1);
+  }
+  if (app.focuschannel === channel) {
+    app.focuschannel = app.channelnames[0];
   }
 }
 
@@ -243,27 +263,27 @@ function inputfocus() {
 <body>
 
 <div id="app">
-<div id="login">
-  <div id="unamepword">
+<div class="login" v-bind:class="state==='login' ? visible : invisible">
+  <div class="unamepword">
     <h1>Hermod chat</h1>
-    Username: <input id="id_salt" ref="id_salt" v-model="self_user.id_salt" @keyup.enter="$refs.password.focus()"> <br/>
-    Password: <input id="password" ref="password" v-model="self_user.password" @keyup.enter="$refs.calculatebutton.click()"> <br/>
+    Username: <input ref="id_salt" v-model="self_user.id_salt" @keyup.enter="$refs.password.focus()"> <br/>
+    Password: <input ref="password" v-model="self_user.password" @keyup.enter="$refs.calculatebutton.click()"> <br/>
     Your password would take {{crack_time}} to crack. <br/>
-    <button id="calculatebutton" ref="calculatebutton" onclick="calculate()">Calculate your IDKey</button>
+    <button ref="calculatebutton" onclick="calculate()">Calculate your IDKey</button>
   </div>
   <div id="calculate" style="display: none">
     <hr/>
-    Nickname: <input id="nickname" ref="nickname" v-model="self_user.nickname" @keyup.enter="$refs.connectbutton.click()"> <br/>
+    Nickname: <input ref="nickname" v-model="self_user.nickname" @keyup.enter="$refs.connectbutton.click()"> <br/>
     IDKey:
     <svg width="128" height="128" v-bind:data-jdenticon-value="self_user.idkey"></svg> <br/>
     <br/>
-    <button id="connectbutton" ref="connectbutton" onclick="connect()">Connect with this nickname and IDKey</button>
+    <button ref="connectbutton" onclick="connect()">Connect with this nickname and IDKey</button>
   </div>
 </div>
 
 <div id="chat" style="display: none">
   <div id="logs">
-    <div class="channel" v-for="(chatlog,ix) in chatlogs" v-on:click="focuschannel=channelnames[ix] ; inputfocus()" v-bind:class="{activechannel: focuschannel===channelnames[ix]}">
+    <div class="channel" v-for="(chatlog,ix) in chatlogs" v-on:click="changechannel(ix)" v-bind:class="{activechannel: focuschannel===channelnames[ix]}">
       <div v-if="channelnames[ix]===''" data-tooltip="CC 3.0 BY - Icon by Freepik https://www.flaticon.com/authors/freepik">
         <object data="home.svg" width=32 height=32></object>
       </div>
@@ -300,6 +320,7 @@ function inputfocus() {
   var app = new Vue({
     el: '#app',
     data: {
+      state: "login",
       websocket: null,
       self_user: {
         id_salt: "",
@@ -314,10 +335,14 @@ function inputfocus() {
       chatlogs: [[]],
       input: "",
       send: function () {
-        var encidkey = btoa(String.fromCharCode(...app.self_user.idkey));
-        var obj = {idkey:encidkey, nickname:app.self_user.nickname, channel:app.focuschannel, message:app.input};
-        app.websocket.send(JSON.stringify(obj));
-        app.input = "";
+        var encidkey = btoa(String.fromCharCode(...this.self_user.idkey));
+        var obj = {idkey:encidkey, nickname:this.self_user.nickname, channel:this.focuschannel, message:this.input};
+        this.websocket.send(JSON.stringify(obj));
+        this.input = "";
+      },
+      changechannel: function (ix) {
+        this.focuschannel = this.channelnames[ix];
+        inputfocus();
       },
     },
     mounted: function () {
