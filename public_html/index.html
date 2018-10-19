@@ -246,18 +246,18 @@ function inputfocus() {
 <div id="login">
   <div id="unamepword">
     <h1>Hermod chat</h1>
-    Username: <input id="id_salt" v-model="self_user.id_salt" @keyup.enter="document.getElementById('password').focus()"> <br/>
-    Password: <input id="password" v-model="self_user.password" @keyup.enter="document.getElementById('calculatebutton').click()"> <br/>
+    Username: <input id="id_salt" ref="id_salt" v-model="self_user.id_salt" @keyup.enter="$refs.password.focus()"> <br/>
+    Password: <input id="password" ref="password" v-model="self_user.password" @keyup.enter="$refs.calculatebutton.click()"> <br/>
     Your password would take {{crack_time}} to crack. <br/>
-    <button id="calculatebutton" onclick="calculate()">Calculate your IDKey</button>
+    <button id="calculatebutton" ref="calculatebutton" onclick="calculate()">Calculate your IDKey</button>
   </div>
   <div id="calculate" style="display: none">
     <hr/>
-    Nickname: <input id="nickname" v-model="self_user.nickname" @keyup.enter="document.getElementById('connectbutton').click()"> <br/>
+    Nickname: <input id="nickname" ref="nickname" v-model="self_user.nickname" @keyup.enter="$refs.connectbutton.click()"> <br/>
     IDKey:
     <svg width="128" height="128" v-bind:data-jdenticon-value="self_user.idkey"></svg> <br/>
     <br/>
-    <button id="connectbutton" onclick="connect()">Connect with this nickname and IDKey</button>
+    <button id="connectbutton" ref="connectbutton" onclick="connect()">Connect with this nickname and IDKey</button>
   </div>
 </div>
 
@@ -291,7 +291,7 @@ function inputfocus() {
   <div id="input">
     <svg width="64" height="64" v-bind:data-jdenticon-value="self_user.idkey"></svg>
     <strong>{{self_user.nickname}}:</strong>
-    <textarea id="input_text" v-model="input" @keyup.enter="send"></textarea>
+    <textarea id="input_text" ref="input_text" v-model="input" @keyup.enter="send"></textarea>
   </div>
 </div>
 </div>
@@ -321,7 +321,7 @@ function inputfocus() {
       },
     },
     mounted: function () {
-      document.getElementById("id_salt").focus();
+      this.$refs.id_salt.focus();
     },
     computed: {
       crack_time: function() {
