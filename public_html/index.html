@@ -250,34 +250,58 @@ function connect() {
   app.websocket.onmessage = function (e) {
     var receive = JSON.parse(e.data);
 
-    if (! ("idkey" in receive)) {return;}
-    var temp = atob(receive.idkey);
-    var decidkey = new Uint8Array(temp.length);
-    for (i=0; i<temp.length; i+=1) {decidkey[i] = temp.charCodeAt(i);}
+    if (! ("idkey" in receive)) {console.log("no idkey"); return;}
+    var decidkey = decode_idkey(receive.idkey);
 
-    if (! ("payload" in receive)) {return;}
+    if (! ("payload" in receive)) {console.log("no payload"); return;}
     //TODO verify signature
     var payload = JSON.parse(receive.payload);
 
-    if (! ("timestamp" in payload)) {return;}
+    if (! ("timestamp" in payload)) {console.log("no timestamp"); return;}
     //TODO verify timestamp
 
     if (! (decidkey in app.users)) {
+      //TODO recognize own idkey
       app.users[decidkey] = {nickname: ""};
+      app.$forceUpdate();
+      update_icons();
     }
 
     app.users[decidkey].lastseen = moment();
     app.users[decidkey].lastcalled = moment();
 
+    if ("who" in payload) {
+      //TODO don't respond to own who
+      Vue.nextTick(function () {
+        app.send_listen();
+      });
+    }
+
+    if ("call" in payload) {
+      var youridkey = decode_idkey(payload.call);
+      if (youridkey === app.self_user.idkey) {
+        Vue.nextTick(function () {
+          app.send_listen();
+        });
+      }
+      else if (youridkey in app.users) {
+        app.users[youridkey].lastcalled = moment();
+      }
+    }
+
+    if ("listen" in payload) {
+      //TODO update channel member lists
+    }
+
     if ("nickname" in payload) {
       app.users[decidkey].nickname = payload.nickname;
     }
 
-    if ("send" in payload) {
-      for (var channel in payload.send) {
+    if ("say" in payload) {
+      for (var channel in payload.say) {
         item = {idkey: decidkey,
                 nickname: app.users[decidkey].nickname,
-                message: payload.send[channel],
+                message: payload.say[channel],
                 timestamp: payload.timestamp};
         post_message(channel, item)
       }
@@ -294,11 +318,24 @@ function connect() {
 
     window.onbeforeunload = function() {return true;};
     app.join("");
+    app.send_who();
   }
 
   app.websocket.onclose = function (e) {
     app.sockmsg = "Not Connected";
   }
+}
+
+function encode_idkey(idkey) {
+  var encidkey = btoa(String.fromCharCode(...idkey));
+  return encidkey;
+}
+
+function decode_idkey(text) {
+  var temp = atob(text);
+  var decidkey = new Uint8Array(temp.length);
+  for (i=0; i<temp.length; i+=1) {decidkey[i] = temp.charCodeAt(i);}
+  return decidkey
 }
 
 function join_channel(channel) {
@@ -312,6 +349,8 @@ function join_channel(channel) {
       app.channelnames.push(channel);
       app.chatlogs.push([]);
     }
+
+    app.send_listen();
   }
 
   app.focuschannel = channel;
@@ -323,9 +362,11 @@ function leave_channel(channel) {
   if (ix != -1) {
     app.chatlogs.splice(ix, 1);
     app.channelnames.splice(ix, 1);
+
+    app.send_listen();
   }
   if (app.focuschannel === channel) {
-    app.focuschannel = app.channelnames[0];
+    app.changechannel(0);
   }
   inputfocus();
 }
@@ -389,11 +430,13 @@ function inputfocus() {
 <div id="chat" v-bind:style="{display: state==='chat' ? '' : 'none'}">
   <button class="homebutton" v-on:click="join('')">&#x1f3e0;</button>
   <button class="newbutton" v-on:click="shownewdiv()">&#x1f4dd;</button>
-  <div class="newdiv" v-bind:style="{display: newdiv_state==='show' ? '' : 'none'}"><input ref="newname" v-model="newchannelname" placeholder="New channel name" @keyup.enter="newchannel()"></input></div>
+  <div class="newdiv" v-bind:style="{display: newdiv_state==='show' ? '' : 'none'}">
+    <input ref="newname" v-model="newchannelname" placeholder="New channel name" @keyup.enter="newchannel()" @keyup.escape="hidenewdiv()"></input>
+  </div>
   <div id="logs">
     <div class="channel" v-for="(chatlog,ix) in chatlogs" v-on:click="changechannel(ix)" v-bind:class="{activechannel: focuschannel===channelnames[ix]}">
       <div class="channelname">
-        <button class="leavebutton" v-on:click="leave(channelnames[ix])">&#x274c;</button>
+        <button class="leavebutton" v-on:click="leave(channelnames[ix], $event)">&#x274c;</button>
         <span v-if="channelnames[ix]===''" data-tooltip="CC 3.0 BY - Icon by Freepik https://www.flaticon.com/authors/freepik">
           <object data="home.svg" width=32 height=32></object>
         </span>
@@ -425,7 +468,7 @@ function inputfocus() {
   <div id="input">
     <svg width="64" height="64" v-bind:data-jdenticon-value="self_user.idkey"></svg>
     <strong>{{self_user.nickname}}:</strong>
-    <textarea id="input_text" ref="input_text" v-model="input" @keydown.enter="send"></textarea>
+    <textarea id="input_text" ref="input_text" v-model="input" @keydown.enter="send_say"></textarea>
   </div>
   <div class="sockmsg">
     {{sockmsg}}
@@ -437,7 +480,8 @@ function inputfocus() {
   var app = new Vue({
     el: '#app',
     data: {
-      interval: null,
+      timestampinterval: null,
+      checkuserinterval: null,
       state: "login",
       sockmsg: "",
       idkey_state: "hide",
@@ -452,53 +496,101 @@ function inputfocus() {
       },
       users: {},
       channelusers: {},
-      channelnames: [""],
+      channelnames: [],
       focuschannel: "",
-      chatlogs: [[]],
+      chatlogs: [],
       newchannelname: "",
       input: "",
-      send: function (e) {
+      signsend: function (payloadobj) {
+        var encidkey = encode_idkey(this.self_user.idkey);
+        var obj = {idkey: encidkey, payload: JSON.stringify(payloadobj)};
+        this.websocket.send(JSON.stringify(obj));
+      },
+      send_say: function (e) {
         e.preventDefault();
         if (this.input === "") {return;}
 
-        // TODO: don't erase input box until message sent?
-        var encidkey = btoa(String.fromCharCode(...this.self_user.idkey));
-        var sendobj = {} ; sendobj[this.focuschannel] = this.input;
-        var payloadobj = {timestamp:moment().utc().format(),
-                          nickname:this.self_user.nickname,
-                          send:sendobj};
-        var obj = {idkey:encidkey, payload:JSON.stringify(payloadobj)};
-        this.websocket.send(JSON.stringify(obj));
+        var sayobj = {} ; sayobj[this.focuschannel] = this.input;
+        var payloadobj = {timestamp: moment().utc().format(),
+                          nickname: this.self_user.nickname,
+                          say: sayobj};
+
+        this.signsend(payloadobj);
+
+        // TODO don't erase input box unless/until message sent
         this.input = "";
       },
+      send_listen: function () {
+        var payloadobj = {timestamp:moment().utc().format(),
+                          nickname: this.self_user.nickname,
+                          listen: this.channelnames};
+        this.signsend(payloadobj);
+      },
+      send_who: function () {
+        var payloadobj = {timestamp:moment().utc().format(),
+                          who: "*"};
+        this.signsend(payloadobj);
+      },
+      send_call: function(youridkey) {
+        var payloadobj = {timestamp:moment().utc().format(),
+                          call: encode_idkey(youridkey)};
+        this.signsend(payloadobj);
+      },
       changechannel: function (ix) {
-        this.focuschannel = this.channelnames[ix];
+        app.focuschannel = app.channelnames[ix];
         inputfocus();
       },
       join: function (channel) {
         join_channel(channel);
       },
-      leave: function (channel) {
+      leave: function (channel, e) {
+        e.stopPropagation();
         leave_channel(channel);
       },
       shownewdiv: function() {
         this.newdiv_state = "show";
-        this.$refs.newname.focus();
+        Vue.nextTick(function () {
+          app.$refs.newname.focus();
+        });
+      },
+      hidenewdiv: function() {
+        this.newchannelname = "";
+        this.newdiv_state = "hide";
+        inputfocus();
       },
       newchannel: function() {
         this.join(this.newchannelname);
         this.newchannelname = "";
         this.newdiv_state = "hide";
       },
+      checkusers: function() {
+        var now = moment();
+        for (var youridkey in this.users) {
+          //TODO log youridkey to find out how it gets hosed
+          var user = this.users[youridkey];
+          if (now - user.lastseen > 60000) {
+            // no word for 1 minute, they're gone
+            delete this.users[youridkey];
+          }
+          else if (now - user.lastcalled > 30000) {
+            // no word for 30 seconds, try calling
+            Vue.nextTick(function () {
+              app.send_call(youridkey);
+            });
+          }
+        }
+      },
     },
     created: function () {
-      this.interval = setInterval(() => this.$forceUpdate(), 60000);
+      this.timestampinterval = setInterval(() => this.$forceUpdate(), 60000);
+      this.checkuserinterval = setInterval(() => this.checkusers(), 10000);
     },
     mounted: function () {
       this.$refs.id_salt.focus();
     },
     beforeDestroy() {
-      clearInterval(this.interval);
+      clearInterval(this.timestampinterval);
+      clearInterval(this.checkuserinterval);
     },
     computed: {
       crack_time: function() {
