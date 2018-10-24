@@ -179,23 +179,57 @@ svg {
   padding-left: 3px;
 }
 
-#who {
+#lists {
   grid-column: 2;
   grid-row: 1;
 
-  overflow-y: scroll;
-
   padding-left: 10px;
+
+  display: flex;
+  flex-direction: column;
 }
 
-div:empty + #who {
+div:empty + #lists {
   border-left: 1px solid black;
+}
+
+#who {
+  overflow-y: scroll;
+
+  flex-basis: 0;
+  flex-grow: 1;
 }
 
 #who ul {
   list-style: none;
   padding: 0;
   margin: 0;
+}
+
+#where {
+  overflow-y: scroll;
+
+  flex-basis: 0;
+  flex-grow: 1;
+}
+
+#where ul {
+  padding-left: 20px;
+  margin: 0;
+  margin-right: 10px;
+}
+
+#where li {
+  cursor: pointer;
+}
+
+#where li:hover {
+  background: #f0f0f0;
+}
+
+#where li:hover:after {
+  content: "\2795";
+  font-size: smaller;
 }
 
 textarea {
@@ -265,7 +299,7 @@ function connect() {
 
     if (! (decidkey in app.users)) {
       //TODO recognize own idkey
-      app.users[decidkey] = {nickname: ""};
+      app.users[decidkey] = {nickname: "", listening: []};
       app.$forceUpdate();
       update_icons();
     }
@@ -293,7 +327,9 @@ function connect() {
     }
 
     if ("listen" in payload) {
+      //TODO sanity check payload.listen
       //TODO update channel member lists
+      app.users[decidkey].listening = payload.listen;
     }
 
     if ("nickname" in payload) {
@@ -342,14 +378,16 @@ function decode_idkey(text) {
 }
 
 function join_channel(channel) {
-  ix = app.channelnames.indexOf(channel);
+  if (typeof channel != "string") {channel = "";}
+
+  ix = app.mychannelnames.indexOf(channel);
   if (ix == -1) {
     if (channel === "") {
-      app.channelnames.unshift(channel);
+      app.mychannelnames.unshift(channel);
       app.chatlogs.unshift([]);
     }
     else {
-      app.channelnames.push(channel);
+      app.mychannelnames.push(channel);
       app.chatlogs.push([]);
     }
 
@@ -361,10 +399,10 @@ function join_channel(channel) {
 }
 
 function leave_channel(channel) {
-  ix = app.channelnames.indexOf(channel);
+  ix = app.mychannelnames.indexOf(channel);
   if (ix != -1) {
     app.chatlogs.splice(ix, 1);
-    app.channelnames.splice(ix, 1);
+    app.mychannelnames.splice(ix, 1);
 
     app.send_listen();
   }
@@ -375,7 +413,7 @@ function leave_channel(channel) {
 }
 
 function post_message(channel, item) {
-  ix = app.channelnames.indexOf(channel);
+  ix = app.mychannelnames.indexOf(channel);
   if (ix != -1) {
     app.chatlogs[ix].push(item);
 
@@ -438,13 +476,13 @@ function inputfocus() {
     <input ref="newname" v-model="newchannelname" placeholder="New channel name" @keyup.enter="newchannel()" @keyup.escape="hidenewdiv()" v-on:blur="hidenewdiv()"></input>
   </div>
   <div id="logs">
-    <div class="channel" v-for="(chatlog,ix) in chatlogs" v-on:click="changechannel(ix)" v-bind:class="{activechannel: focuschannel===channelnames[ix]}">
+    <div class="channel" v-for="(chatlog,ix) in chatlogs" v-on:click="changechannel(ix)" v-bind:class="{activechannel: focuschannel===mychannelnames[ix]}">
       <div class="channelname">
-        <button class="leavebutton" v-on:click="leave(channelnames[ix], $event)">&#x274c;</button>
-        <span v-if="channelnames[ix]===''" data-tooltip="CC 3.0 BY - Icon by Freepik https://www.flaticon.com/authors/freepik">
+        <button class="leavebutton" v-on:click="leave(mychannelnames[ix], $event)">&#x274c;</button>
+        <span v-if="mychannelnames[ix]===''" data-tooltip="CC 3.0 BY - Icon by Freepik https://www.flaticon.com/authors/freepik">
           <object data="home.svg" width=32 height=32></object>
         </span>
-        <strong>{{channelnames[ix]}}</strong>
+        <strong>{{mychannelnames[ix]}}</strong>
       </div>
       <div class="chatlog">
         <div class="msg" v-for="item in chatlog">
@@ -460,14 +498,26 @@ function inputfocus() {
       </div>
     </div>
   </div>
-  <div id="who">
-    <h3>Channel Members:</h3>
-    <ul>
-      <li v-for="(item,idkey) in users">
-        <svg width="32" height="32" v-bind:data-jdenticon-value="idkey"></svg>
-        <strong>{{item.nickname}}</strong>
-      </li>
-    </ul>
+  <div id="lists">
+    <div id="who">
+      <strong>Channel Members:</strong>
+      <ul>
+        <li v-for="idkey in sorted_channel_users">
+          <svg width="32" height="32" v-bind:data-jdenticon-value="idkey"></svg>
+          <strong>{{users[idkey].nickname}}</strong>
+        </li>
+      </ul>
+    </div>
+    <hr style="width: 100%;" />
+    <div id="where">
+      <strong>Active Channels:</strong>
+      <ul>
+        <li v-for="item in sorted_channels" @click="join(item)">
+          <strong>{{item}}</strong>
+          <strong v-if="item===''">&#x1f3e0;</strong>
+        </li>
+      </ul>
+    </div>
   </div>
   <div id="input">
     <svg width="64" height="64" v-bind:data-jdenticon-value="self_user.idkey"></svg>
@@ -500,7 +550,7 @@ function inputfocus() {
       },
       users: {},
       channelusers: {},
-      channelnames: [],
+      mychannelnames: [],
       focuschannel: "",
       chatlogs: [],
       newchannelname: "",
@@ -527,7 +577,7 @@ function inputfocus() {
       send_listen: function () {
         var payloadobj = {timestamp:moment().utc().format(),
                           nickname: this.self_user.nickname,
-                          listen: this.channelnames};
+                          listen: this.mychannelnames};
         this.signsend(payloadobj);
       },
       send_who: function () {
@@ -541,7 +591,8 @@ function inputfocus() {
         this.signsend(payloadobj);
       },
       changechannel: function (ix) {
-        app.focuschannel = app.channelnames[ix];
+        this.checkusers();
+        app.focuschannel = app.mychannelnames[ix];
         inputfocus();
       },
       join: function (channel) {
@@ -568,15 +619,16 @@ function inputfocus() {
         this.newdiv_state = "hide";
       },
       checkusers: function() {
-        var booted = false;
         var now = moment();
+        this.channelusers = {};
+
         for (var youridkey in this.users) {
           //TODO log youridkey to find out how it gets hosed
           var user = this.users[youridkey];
           if (now - user.lastseen > 60000) {
             // no word for 1 minute, they're gone
             delete this.users[youridkey];
-            booted = true;
+            continue;
           }
           else if (now - user.lastcalled > 30000) {
             // no word for 30 seconds, try calling
@@ -584,12 +636,21 @@ function inputfocus() {
               app.send_call(youridkey);
             });
           }
+
+          // if user is still around, record channel membership
+          var listening = this.users[youridkey].listening;
+          for (var ix in listening) {
+            if (listening[ix] in this.channelusers) {
+            }
+            else {
+              Vue.set(this.channelusers, listening[ix], {});
+            }
+            Vue.set(this.channelusers[listening[ix]], youridkey, true);
+          }
         }
 
-        if (booted) {
-          this.$forceUpdate();
-          update_icons();
-        }
+        this.$forceUpdate();
+        update_icons();
       },
     },
     created: function () {
@@ -604,8 +665,20 @@ function inputfocus() {
       clearInterval(this.checkuserinterval);
     },
     computed: {
-      crack_time: function() {
+      crack_time: function () {
         return zxcvbn(this.self_user.password).crack_times_display.offline_slow_hashing_1e4_per_second;
+      },
+      sorted_channel_users: function () {
+        if (! (this.focuschannel in this.channelusers)) {return new Array();}
+
+        var temp = Object.keys(this.channelusers[this.focuschannel]);
+        temp.sort();
+        return temp;
+      },
+      sorted_channels: function () {
+        var temp = Object.keys(this.channelusers);
+        temp.sort();
+        return temp;
       },
     },
     filters: {
