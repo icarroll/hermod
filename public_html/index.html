@@ -400,6 +400,7 @@ function scrolldown() {
 }
 
 function inputfocus() {
+  //TODO allow copy-paste
   Vue.nextTick(function () {
     document.getElementById("input_text").focus();
   });
@@ -432,7 +433,7 @@ function inputfocus() {
 
 <div id="chat" v-show="state==='chat'" v-cloak>
   <button class="homebutton" v-on:click="join('')">&#x1f3e0;</button>
-  <button class="newbutton" v-on:click="shownewdiv()">&#x1f4dd;</button>
+  <button class="newbutton" v-on:click="shownewdiv()">&#x2795;</button>
   <div class="newdiv" v-show="newdiv_state==='show'">
     <input ref="newname" v-model="newchannelname" placeholder="New channel name" @keyup.enter="newchannel()" @keyup.escape="hidenewdiv()" v-on:blur="hidenewdiv()"></input>
   </div>
@@ -567,6 +568,7 @@ function inputfocus() {
         this.newdiv_state = "hide";
       },
       checkusers: function() {
+        var booted = false;
         var now = moment();
         for (var youridkey in this.users) {
           //TODO log youridkey to find out how it gets hosed
@@ -574,7 +576,7 @@ function inputfocus() {
           if (now - user.lastseen > 60000) {
             // no word for 1 minute, they're gone
             delete this.users[youridkey];
-            update_icons();
+            booted = true;
           }
           else if (now - user.lastcalled > 30000) {
             // no word for 30 seconds, try calling
@@ -582,6 +584,11 @@ function inputfocus() {
               app.send_call(youridkey);
             });
           }
+        }
+
+        if (booted) {
+          this.$forceUpdate();
+          update_icons();
         }
       },
     },
