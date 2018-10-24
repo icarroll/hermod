@@ -3,11 +3,20 @@
 from pubsub import pub
 from websocket_server import *
 
+class Client:
+  pass
+
+client_info = dict()
+
 def new_client(client, server):
-    print("new client", client["id"])
+    clientid = client["id"]
+    client_info[clientid] = Client()
+    print("new client", clientid)
 
 def client_left(client, server):
-    print("client", client["id"], "left")
+    clientid = client["id"]
+    del client_info[clientid]
+    print("client", clientid, "left")
 
 def message_received(client, server, message):
     print("client", client["id"], "said", message)
