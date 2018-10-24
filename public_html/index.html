@@ -22,6 +22,10 @@
   <script src="moment-timezone-with-data.js"></script>
 
 <style>
+[v-cloak] {
+  display: none;
+}
+
 [data-tooltip] {
   position: relative;
 }
@@ -105,7 +109,13 @@ svg {
   flex-direction: row;
 }
 
+.channel.activechannel {
+  opacity: 1;
+}
+
 .channel {
+  opacity: 0.5;
+
   flex-basis: 0;
   flex-grow: 1;
   border-right: 1px solid black;
@@ -409,7 +419,7 @@ function inputfocus() {
     <br/>
     <button ref="calculatebutton" onclick="calculate()">Calculate your IDKey</button>
   </div>
-  <div id="calculate" v-show="idkey_state==='show'">
+  <div id="calculate" v-show="idkey_state==='show'" v-cloak>
     Nickname: <input ref="nickname" v-model="self_user.nickname" @keyup.enter="$refs.connectbutton.click()"> <br/>
     IDKey:
     <svg width="128" height="128" v-bind:data-jdenticon-value="self_user.idkey"></svg> <br/>
@@ -420,11 +430,11 @@ function inputfocus() {
   </div>
 </div>
 
-<div id="chat" v-show="state==='chat'">
+<div id="chat" v-show="state==='chat'" v-cloak>
   <button class="homebutton" v-on:click="join('')">&#x1f3e0;</button>
   <button class="newbutton" v-on:click="shownewdiv()">&#x1f4dd;</button>
   <div class="newdiv" v-show="newdiv_state==='show'">
-    <input ref="newname" v-model="newchannelname" placeholder="New channel name" @keyup.enter="newchannel()" @keyup.escape="hidenewdiv()"></input>
+    <input ref="newname" v-model="newchannelname" placeholder="New channel name" @keyup.enter="newchannel()" @keyup.escape="hidenewdiv()" v-on:blur="hidenewdiv()"></input>
   </div>
   <div id="logs">
     <div class="channel" v-for="(chatlog,ix) in chatlogs" v-on:click="changechannel(ix)" v-bind:class="{activechannel: focuschannel===channelnames[ix]}">
@@ -450,7 +460,7 @@ function inputfocus() {
     </div>
   </div>
   <div id="who">
-    <h3>Users here:</h3>
+    <h3>Channel Members:</h3>
     <ul>
       <li v-for="(item,idkey) in users">
         <svg width="32" height="32" v-bind:data-jdenticon-value="idkey"></svg>
@@ -461,7 +471,7 @@ function inputfocus() {
   <div id="input">
     <svg width="64" height="64" v-bind:data-jdenticon-value="self_user.idkey"></svg>
     <strong>{{self_user.nickname}}:</strong>
-    <textarea id="input_text" ref="input_text" v-model="input" @keydown.enter="send_say"></textarea>
+    <textarea id="input_text" ref="input_text" v-model.trim="input" @keydown.enter="send_say"></textarea>
   </div>
   <div class="sockmsg">
     {{sockmsg}}
@@ -564,7 +574,7 @@ function inputfocus() {
           if (now - user.lastseen > 60000) {
             // no word for 1 minute, they're gone
             delete this.users[youridkey];
-            this.update_icons();
+            update_icons();
           }
           else if (now - user.lastcalled > 30000) {
             // no word for 30 seconds, try calling
