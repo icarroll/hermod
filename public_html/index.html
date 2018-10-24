@@ -42,13 +42,6 @@
   visibility: visible;
 }
 
-.visible {
-}
-
-.invisible {
-  display: none;
-}
-
 .login {
   height: 100%;
   display: grid;
@@ -407,7 +400,7 @@ function inputfocus() {
 <body>
 
 <div id="app">
-<div class="login" v-bind:style="{display: state==='login' ? '' : 'none'}">
+<div class="login" v-show="state==='login'">
   <div class="unamepword">
     <h1>Hermod chat</h1>
     Username: <input ref="id_salt" v-model="self_user.id_salt" @keyup.enter="$refs.password.focus()"> <br/>
@@ -416,7 +409,7 @@ function inputfocus() {
     <br/>
     <button ref="calculatebutton" onclick="calculate()">Calculate your IDKey</button>
   </div>
-  <div id="calculate" v-bind:style="{display: idkey_state==='show' ? '' : 'none'}">
+  <div id="calculate" v-show="idkey_state==='show'">
     Nickname: <input ref="nickname" v-model="self_user.nickname" @keyup.enter="$refs.connectbutton.click()"> <br/>
     IDKey:
     <svg width="128" height="128" v-bind:data-jdenticon-value="self_user.idkey"></svg> <br/>
@@ -427,10 +420,10 @@ function inputfocus() {
   </div>
 </div>
 
-<div id="chat" v-bind:style="{display: state==='chat' ? '' : 'none'}">
+<div id="chat" v-show="state==='chat'">
   <button class="homebutton" v-on:click="join('')">&#x1f3e0;</button>
   <button class="newbutton" v-on:click="shownewdiv()">&#x1f4dd;</button>
-  <div class="newdiv" v-bind:style="{display: newdiv_state==='show' ? '' : 'none'}">
+  <div class="newdiv" v-show="newdiv_state==='show'">
     <input ref="newname" v-model="newchannelname" placeholder="New channel name" @keyup.enter="newchannel()" @keyup.escape="hidenewdiv()"></input>
   </div>
   <div id="logs">
@@ -571,6 +564,7 @@ function inputfocus() {
           if (now - user.lastseen > 60000) {
             // no word for 1 minute, they're gone
             delete this.users[youridkey];
+            this.update_icons();
           }
           else if (now - user.lastcalled > 30000) {
             // no word for 30 seconds, try calling
