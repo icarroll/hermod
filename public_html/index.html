@@ -1,7 +1,12 @@
 <html>
 <head>
+  <link type="text/css" rel="stylesheet" href="bootstrap.min.css"/>
+  <link type="text/css" rel="stylesheet" href="bootstrap-vue.css"/>
+
   <!-- <script src="vue.min.js"></script> -->
   <script src="vue.js"></script>
+  <script src="bootstrap-vue.js"></script>
+
   <script src="jdenticon.min.js"></script>
   <script>
     window.jdenticon_config = {
@@ -16,8 +21,10 @@
       backColor: "#ffffff"
     };
   </script>
+
   <script src="sodium.js"></script>
   <script src="zxcvbn.js"></script>
+
   <script src="moment.js"></script>
   <script src="moment-timezone-with-data.js"></script>
 
@@ -58,12 +65,12 @@
   grid-row: 2;
 }
 
-#calculate {
+.calculate {
   grid-column: 2;
   grid-row: 3;
 }
 
-#chat {
+.chat {
   height: 100%;
   display: grid;
   grid-template-columns: 80% 20%;
@@ -451,25 +458,35 @@ function inputfocus() {
 <div id="app">
 <div class="login" v-show="state==='login'">
   <div class="unamepword">
-    <h1>Hermod chat</h1>
-    Username: <input ref="id_salt" v-model="self_user.id_salt" @keyup.enter="$refs.password.focus()"> <br/>
-    Password: <input ref="password" v-model="self_user.password" @keyup.enter="$refs.calculatebutton.click()"> <br/>
-    Your password would take {{crack_time}} to crack. <br/>
-    <br/>
-    <button ref="calculatebutton" onclick="calculate()">Calculate your IDKey</button>
+    <b-card title="Hermod chat">
+      <b-input-group prepend="Username:">
+        <b-form-input ref="id_salt" v-model="self_user.id_salt" @keyup.enter.native="$refs.password.focus()"></b-form-input>
+      </b-input-group>
+      <b-input-group prepend="Password:">
+        <b-form-input ref="password" v-model="self_user.password" @keyup.enter.native="$refs.calculatebutton.click()"></b-form-input>
+      </b-input-group>
+      Your password would take {{crack_time}} to crack.
+      <br/>
+      <b-button ref="calculatebutton" onclick="calculate()">Calculate your IDKey</b-button>
+    </b-card>
   </div>
-  <div id="calculate" v-show="idkey_state==='show'" v-cloak>
-    Nickname: <input ref="nickname" v-model="self_user.nickname" @keyup.enter="$refs.connectbutton.click()"> <br/>
-    IDKey:
-    <svg width="128" height="128" v-bind:data-jdenticon-value="self_user.idkey"></svg> <br/>
-    <br/>
-    <button ref="connectbutton" onclick="connect()">Connect with this nickname and IDKey</button>
-    <br/>
-    {{sockmsg}}
+
+  <div class="calculate" v-show="idkey_state==='show'" v-cloak>
+    <b-card>
+      <b-input-group prepend="Nickname:">
+        <b-form-input ref="nickname" v-model="self_user.nickname" @keyup.enter.native="$refs.connectbutton.click()"></b-form-input>
+      </b-input-group>
+      IDKey:
+      <svg width="128" height="128" v-bind:data-jdenticon-value="self_user.idkey"></svg>
+      <br/>
+      <b-button ref="connectbutton" onclick="connect()">Connect with this nickname and IDKey</b-button>
+      <br/>
+      {{sockmsg}}
+    </b-card>
   </div>
 </div>
 
-<div id="chat" v-show="state==='chat'" v-cloak>
+<div class="chat" v-show="state==='chat'" v-cloak>
   <button class="homebutton" v-on:click="join('')">&#x1f3e0;</button>
   <button class="newbutton" v-on:click="shownewdiv()">&#x2795;</button>
   <div class="newdiv" v-show="newdiv_state==='show'">
