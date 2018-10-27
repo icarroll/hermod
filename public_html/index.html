@@ -1,16 +1,22 @@
 <html>
 <!--
 TODO:
+track channels and membership more closely
 auto-link urls
 auto-reconnect attempt
 hide password button
 tooltips on home and add buttons
 hints for vue for channel join/leave
-track channels and membership more closely
-right-side padding for timestamp
-timestamp sync
 control-enter for newline in chat
 trim text, don't send pure whitespace
+scroll to bottom on size change
+allow copy of chat text
+figure out channel membership for multiple login
+
+attach signature
+verify signature
+verify timestamp
+time sync
 -->
 <head>
   <link type="text/css" rel="stylesheet" href="bootstrap.min.css"/>
@@ -75,8 +81,10 @@ trim text, don't send pure whitespace
   z-index: 2;
   top: 0;
   right: 20%;
+}
+
+.navbuttons button {
   background: white;
-  border-radius: .25rem;
 }
 
 .newdiv {
