@@ -11,8 +11,6 @@ control-enter for newline in chat
 scroll to bottom on size change
 figure out channel membership for multiple login
 
-attach signature
-verify signature
 verify timestamp
 time sync
 -->
@@ -314,14 +312,20 @@ function connect() {
     var receive = JSON.parse(e.data);
 
     if (! ("idkey" in receive)) {console.log("no idkey"); return;}
-    var decidkey = decode_idkey(receive.idkey);
+    var decidkey = decode_base64(receive.idkey);
 
     if (! ("payload" in receive)) {console.log("no payload"); return;}
-    //TODO verify signature
+    var signature = decode_base64(receive.signature);
+    if (! sodium.crypto_sign_verify_detached(signature, receive.payload, decidkey)) {console.log("didn't match") ; return;}
     var payload = JSON.parse(receive.payload);
 
     if (! ("timestamp" in payload)) {console.log("no timestamp"); return;}
     //TODO verify timestamp
+    /*
+    var then_t = moment(payload.timestamp);
+    var now_t = moment().utc();
+    console.log(then_t.format(), now_t.format(), now_t - then_t)
+    */
 
     if (! (decidkey in app.users)) {
       //TODO recognize own idkey
@@ -341,7 +345,7 @@ function connect() {
     }
 
     if ("call" in payload) {
-      var youridkey = decode_idkey(payload.call);
+      var youridkey = decode_base64(payload.call);
       if (youridkey === app.self_user.idkey) {
         Vue.nextTick(function () {
           app.send_listen();
@@ -391,16 +395,16 @@ function connect() {
   }
 }
 
-function encode_idkey(idkey) {
-  var encidkey = btoa(String.fromCharCode(...idkey));
-  return encidkey;
+function encode_base64(text) {
+  var code = btoa(String.fromCharCode(...text));
+  return code;
 }
 
-function decode_idkey(text) {
-  var temp = atob(text);
-  var decidkey = new Uint8Array(temp.length);
-  for (i=0; i<temp.length; i+=1) {decidkey[i] = temp.charCodeAt(i);}
-  return decidkey
+function decode_base64(code) {
+  var temp = atob(code);
+  var text = new Uint8Array(temp.length);
+  for (i=0; i<temp.length; i+=1) {text[i] = temp.charCodeAt(i);}
+  return text
 }
 
 function join_channel(channel) {
@@ -610,8 +614,11 @@ function inputfocus() {
       newchannelname: "",
       input: "",
       signsend: function (payloadobj) {
-        var encidkey = encode_idkey(this.self_user.idkey);
-        var obj = {idkey: encidkey, payload: JSON.stringify(payloadobj)};
+        var encidkey = encode_base64(this.self_user.idkey);
+        var payload = JSON.stringify(payloadobj);
+        var signatureobj = sodium.crypto_sign_detached(payload, this.self_user.privkey);
+        var signature = encode_base64(signatureobj);
+        var obj = {idkey: encidkey, payload: payload, signature: signature};
         this.websocket.send(JSON.stringify(obj));
       },
       send_say: function (e) {
@@ -642,7 +649,7 @@ function inputfocus() {
       },
       send_call: function(youridkey) {
         var payloadobj = {timestamp:moment().utc().format(),
-                          call: encode_idkey(youridkey)};
+                          call: encode_base64(youridkey)};
         this.signsend(payloadobj);
       },
       changechannel: function (ix) {
