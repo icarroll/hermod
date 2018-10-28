@@ -8,9 +8,7 @@ hide password button
 tooltips on home and add buttons
 hints for vue for channel join/leave
 control-enter for newline in chat
-trim text, don't send pure whitespace
 scroll to bottom on size change
-allow copy of chat text
 figure out channel membership for multiple login
 
 attach signature
@@ -618,6 +616,7 @@ function inputfocus() {
       },
       send_say: function (e) {
         e.preventDefault();
+        this.input = this.input.trim();
         if (this.input === "") {return;}
 
         var sayobj = {} ; sayobj[this.focuschannel] = this.input;
@@ -647,6 +646,8 @@ function inputfocus() {
         this.signsend(payloadobj);
       },
       changechannel: function (ix) {
+        if (document.getSelection().toString() != "") {return;}
+
         this.checkusers();
         app.focuschannel = app.mychannelnames[ix];
         inputfocus();
