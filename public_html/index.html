@@ -1,7 +1,6 @@
 <html>
 <!--
 TODO:
-track channels and membership more closely
 auto-link urls
 auto-reconnect attempt
 hide password button
@@ -277,10 +276,16 @@ textarea {
   padding-right: 10px;
 }
 
-.sockmsg {
+span.sockstate {
   position: absolute;
-  bottom: 0;
-  left: 0;
+  bottom: 10px;
+  right: 10px;
+}
+
+div.sockstate {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
 }
 </style>
 
@@ -304,12 +309,18 @@ function calculate() {
 function connect() {
   // app.websocket = new WebSocket("ws://" + window.location.host + ":8192" + window.location.pathname.substring(0, window.location.pathname.lastIndexOf("/")) + "/chatsock");
   // app.websocket = new WebSocket("ws://" + window.location.host + ":8192" + "/chatsock");
-  app.sockmsg = "Connecting...";
+  app.sockstate = "connecting";
 
   app.websocket = new WebSocket("ws://ada.cs.pdx.edu:8192/")
 
   app.websocket.onmessage = function (e) {
     var receive = JSON.parse(e.data);
+
+    if ("advise_disconnect" in receive) {
+      delete app.users[receive.advise_disconnect];
+      app.checkusers(); //TODO only update the one client
+      return;
+    }
 
     if (! ("idkey" in receive)) {console.log("no idkey"); return;}
     var encidkey = receive.idkey;
@@ -329,7 +340,7 @@ function connect() {
     */
 
     if (! (encidkey in app.users)) {
-      //TODO recognize own idkey
+      //TODO recognize own idkey (?)
       app.users[encidkey] = {nickname: "", listening: []};
       app.$forceUpdate();
       update_icons();
@@ -339,16 +350,21 @@ function connect() {
     app.users[encidkey].lastcalled = moment();
 
     if ("who" in payload) {
-      //TODO don't respond to own who
-      Vue.nextTick(function () {
-        app.send_listen();
-      });
+      if (encidkey != app.idkey_base64) {
+        // call is not from me, send reply
+        Vue.nextTick(function () {
+          console.log("got who, sending listen");
+          app.send_listen();
+        });
+      }
     }
 
     if ("call" in payload) {
-      var youridkey = decode_base64(payload.call);
-      if (youridkey === app.self_user.idkey) {
+      var youridkey = payload.call;
+      if (youridkey === app.idkey_base64) {
+        // call is for me, send reply
         Vue.nextTick(function () {
+          console.log("got call, sending listen");
           app.send_listen();
         });
       }
@@ -361,6 +377,7 @@ function connect() {
       //TODO sanity check payload.listen
       //TODO update channel member lists
       app.users[encidkey].listening = payload.listen;
+      app.checkusers(); //TODO only update the one client
     }
 
     if ("nickname" in payload) {
@@ -382,20 +399,22 @@ function connect() {
     var encidkey = btoa(String.fromCharCode(...app.self_user.idkey));
     var obj = {idkey:encidkey, nickname:app.self_user.nickname, join:[""]};
 
-    app.sockmsg = "Connected";
+    app.sockstate = "connected";
     app.state="chat";
 
     window.onbeforeunload = function() {return true;};
     app.join("");
     app.send_who();
+
+    app.checkusers();
   }
 
   app.websocket.onclose = function (e) {
-    app.sockmsg = "Not Connected";
+    app.sockstate = "notconnected";
   }
 
   app.websocket.onerror = function (e) {
-    app.sockmsg = "Not Connected";
+    app.sockstate = "notconnected";
   }
 }
 
@@ -425,10 +444,12 @@ function join_channel(channel) {
       app.chatlogs.push([]);
     }
 
+    console.log("joined channel, sending listen");
     app.send_listen();
   }
 
   app.focuschannel = channel;
+  app.checkusers(); //TODO only update the one client
   inputfocus();
 }
 
@@ -438,11 +459,13 @@ function leave_channel(channel) {
     app.chatlogs.splice(ix, 1);
     app.mychannelnames.splice(ix, 1);
 
+    console.log("left channel, sending listen");
     app.send_listen();
   }
   if (app.focuschannel === channel) {
     app.changechannel(0);
   }
+  app.checkusers(); //TODO only update the one client
   inputfocus();
 }
 
@@ -507,8 +530,7 @@ function inputfocus() {
       <svg width="128" height="128" v-bind:data-jdenticon-value="idkey_base64"></svg>
       <br/>
       <b-button variant="outline-primary" ref="connectbutton" onclick="connect()">Connect with this nickname and IDKey</b-button>
-      <br/>
-      {{sockmsg}}
+      <span class="sockstate" v-bind:style="{color: sockstatecolor}">{{sockstatetext}}</span>
     </b-card>
   </div>
 </div>
@@ -586,9 +608,7 @@ function inputfocus() {
     <strong>{{self_user.nickname}}:</strong>
     <b-form-textarea id="input_text" ref="input_text" v-model="input" @keydown.enter.native="send_say"></textarea>
   </div>
-  <div class="sockmsg">
-    {{sockmsg}}
-  </div>
+  <div class="sockstate" v-bind:style="{color: sockstatecolor}">{{sockstatetext}}</div>
 </div>
 </div>
 
@@ -599,7 +619,7 @@ function inputfocus() {
       timestampinterval: null,
       checkuserinterval: null,
       state: "login",
-      sockmsg: "",
+      sockstate: "notconnected",
       idkey_state: "hide",
       newdiv_state: "hide",
       websocket: null,
@@ -641,19 +661,19 @@ function inputfocus() {
         this.input = "";
       },
       send_listen: function () {
-        var payloadobj = {timestamp:moment().utc().format(),
+        var payloadobj = {timestamp: moment().utc().format(),
                           nickname: this.self_user.nickname,
                           listen: this.mychannelnames};
         this.signsend(payloadobj);
       },
       send_who: function () {
-        var payloadobj = {timestamp:moment().utc().format(),
+        var payloadobj = {timestamp: moment().utc().format(),
                           who: "*"};
         this.signsend(payloadobj);
       },
       send_call: function(youridkey) {
-        var payloadobj = {timestamp:moment().utc().format(),
-                          call: encode_base64(youridkey)};
+        var payloadobj = {timestamp: moment().utc().format(),
+                          call: youridkey};
         this.signsend(payloadobj);
       },
       changechannel: function (ix) {
@@ -690,27 +710,36 @@ function inputfocus() {
         var now = moment();
         this.channelusers = {};
 
-        for (var youridkey in this.users) {
-          //TODO log youridkey to find out how it gets hosed
-          var user = this.users[youridkey];
-          if (now - user.lastseen > 60000) {
-            // no word for 1 minute, they're gone
-            delete this.users[youridkey];
-            continue;
+        // record my own channels
+        var listening = this.self_user.mychannelnames;
+        for (var ix in listening) {
+          if (! (listening[ix] in this.channelusers)) {
+            Vue.set(this.channelusers, listening[ix], {});
           }
-          else if (now - user.lastcalled > 30000) {
-            // no word for 30 seconds, try calling
-            Vue.nextTick(function () {
-              app.send_call(youridkey);
-            });
+          Vue.set(this.channelusers[listening[ix]], this.idkey_base64, true);
+        }
+
+        for (var youridkey in this.users) {
+          var user = this.users[youridkey];
+          if (youridkey != this.idkey_base64) {
+            // checking someone else, not me
+            if (now - user.lastseen > 60000) {
+              // no word for 1 minute, they're gone
+              delete this.users[youridkey];
+              continue;
+            }
+            else if (now - user.lastcalled > 30000) {
+              // no word for 30 seconds, try calling
+              Vue.nextTick(function () {
+                app.send_call(youridkey);
+              });
+            }
           }
 
           // if user is still around, record channel membership
           var listening = this.users[youridkey].listening;
           for (var ix in listening) {
-            if (listening[ix] in this.channelusers) {
-            }
-            else {
+            if (! (listening[ix] in this.channelusers)) {
               Vue.set(this.channelusers, listening[ix], {});
             }
             Vue.set(this.channelusers[listening[ix]], youridkey, true);
@@ -733,6 +762,38 @@ function inputfocus() {
       clearInterval(this.checkuserinterval);
     },
     computed: {
+      sockstatecolor: function () {
+        switch (this.sockstate) {
+          case "notconnected":
+            return "red";
+            break;
+          case "connecting":
+            return "blue";
+            break;
+          case "connected":
+            return "green";
+            break;
+          default:
+            return "red";
+            break;
+        }
+      },
+      sockstatetext: function () {
+        switch (this.sockstate) {
+          case "notconnected":
+            return "Not Connected";
+            break;
+          case "connecting":
+            return "Connecting...";
+            break;
+          case "connected":
+            return "Connected";
+            break;
+          default:
+            return "ERROR";
+            break;
+        }
+      },
       idkey_base64: function () {
         return encode_base64(this.self_user.idkey);
       },
