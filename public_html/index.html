@@ -312,7 +312,8 @@ function connect() {
     var receive = JSON.parse(e.data);
 
     if (! ("idkey" in receive)) {console.log("no idkey"); return;}
-    var decidkey = decode_base64(receive.idkey);
+    var encidkey = receive.idkey;
+    var decidkey = decode_base64(encidkey);
 
     if (! ("payload" in receive)) {console.log("no payload"); return;}
     var signature = decode_base64(receive.signature);
@@ -327,15 +328,15 @@ function connect() {
     console.log(then_t.format(), now_t.format(), now_t - then_t)
     */
 
-    if (! (decidkey in app.users)) {
+    if (! (encidkey in app.users)) {
       //TODO recognize own idkey
-      app.users[decidkey] = {nickname: "", listening: []};
+      app.users[encidkey] = {nickname: "", listening: []};
       app.$forceUpdate();
       update_icons();
     }
 
-    app.users[decidkey].lastseen = moment();
-    app.users[decidkey].lastcalled = moment();
+    app.users[encidkey].lastseen = moment();
+    app.users[encidkey].lastcalled = moment();
 
     if ("who" in payload) {
       //TODO don't respond to own who
@@ -359,17 +360,17 @@ function connect() {
     if ("listen" in payload) {
       //TODO sanity check payload.listen
       //TODO update channel member lists
-      app.users[decidkey].listening = payload.listen;
+      app.users[encidkey].listening = payload.listen;
     }
 
     if ("nickname" in payload) {
-      app.users[decidkey].nickname = payload.nickname;
+      app.users[encidkey].nickname = payload.nickname;
     }
 
     if ("say" in payload) {
       for (var channel in payload.say) {
-        item = {idkey: decidkey,
-                nickname: app.users[decidkey].nickname,
+        item = {idkey: encidkey,
+                nickname: app.users[encidkey].nickname,
                 message: payload.say[channel],
                 timestamp: payload.timestamp};
         post_message(channel, item)
@@ -380,7 +381,6 @@ function connect() {
   app.websocket.onopen = function (e) {
     var encidkey = btoa(String.fromCharCode(...app.self_user.idkey));
     var obj = {idkey:encidkey, nickname:app.self_user.nickname, join:[""]};
-    // app.websocket.send(JSON.stringify(obj));
 
     app.sockmsg = "Connected";
     app.state="chat";
@@ -391,6 +391,10 @@ function connect() {
   }
 
   app.websocket.onclose = function (e) {
+    app.sockmsg = "Not Connected";
+  }
+
+  app.websocket.onerror = function (e) {
     app.sockmsg = "Not Connected";
   }
 }
@@ -500,7 +504,7 @@ function inputfocus() {
         <b-form-input ref="nickname" v-model="self_user.nickname" @keyup.enter.native="$refs.connectbutton.click()"></b-form-input>
       </b-input-group>
       IDKey:
-      <svg width="128" height="128" v-bind:data-jdenticon-value="self_user.idkey"></svg>
+      <svg width="128" height="128" v-bind:data-jdenticon-value="idkey_base64"></svg>
       <br/>
       <b-button variant="outline-primary" ref="connectbutton" onclick="connect()">Connect with this nickname and IDKey</b-button>
       <br/>
@@ -578,7 +582,7 @@ function inputfocus() {
     </div>
   </div>
   <div id="input" class="container-fluid">
-    <svg width="64" height="64" v-bind:data-jdenticon-value="self_user.idkey"></svg>
+    <svg width="64" height="64" v-bind:data-jdenticon-value="idkey_base64"></svg>
     <strong>{{self_user.nickname}}:</strong>
     <b-form-textarea id="input_text" ref="input_text" v-model="input" @keydown.enter.native="send_say"></textarea>
   </div>
@@ -729,6 +733,9 @@ function inputfocus() {
       clearInterval(this.checkuserinterval);
     },
     computed: {
+      idkey_base64: function () {
+        return encode_base64(this.self_user.idkey);
+      },
       crack_time: function () {
         return zxcvbn(this.self_user.password).crack_times_display.offline_slow_hashing_1e4_per_second;
       },
