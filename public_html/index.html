@@ -1,7 +1,6 @@
 <html>
 <!--
 TODO:
-auto-link urls
 auto-reconnect attempt
 hide password button
 tooltips on home and add buttons
@@ -192,6 +191,7 @@ button:hover svg {
   border-bottom: 1px solid lightgrey;
   padding-left: 3px;
   padding-right: 3px;
+  margin-left: 5px;
 }
 
 #lists {
@@ -347,30 +347,14 @@ function connect() {
     }
 
     app.users[encidkey].lastseen = moment();
-    app.users[encidkey].lastcalled = moment();
 
     if ("who" in payload) {
-      if (encidkey != app.idkey_base64) {
-        // call is not from me, send reply
-        Vue.nextTick(function () {
-          console.log("got who, sending listen");
-          app.send_listen();
-        });
-      }
-    }
-
-    if ("call" in payload) {
-      var youridkey = payload.call;
-      if (youridkey === app.idkey_base64) {
-        // call is for me, send reply
-        Vue.nextTick(function () {
-          console.log("got call, sending listen");
-          app.send_listen();
-        });
-      }
-      else if (youridkey in app.users) {
-        app.users[youridkey].lastcalled = moment();
-      }
+      // yes, reply to my own who
+      app.lastwho = moment();
+      Vue.nextTick(function () {
+        console.log("got who, sending listen");
+        app.send_listen();
+      });
     }
 
     if ("listen" in payload) {
@@ -388,7 +372,7 @@ function connect() {
       for (var channel in payload.say) {
         item = {idkey: encidkey,
                 nickname: app.users[encidkey].nickname,
-                message: payload.say[channel],
+                message: safelink(payload.say[channel]),
                 timestamp: payload.timestamp};
         post_message(channel, item)
       }
@@ -396,9 +380,6 @@ function connect() {
   }
 
   app.websocket.onopen = function (e) {
-    var encidkey = btoa(String.fromCharCode(...app.self_user.idkey));
-    var obj = {idkey:encidkey, nickname:app.self_user.nickname, join:[""]};
-
     app.sockstate = "connected";
     app.state="chat";
 
@@ -477,6 +458,32 @@ function post_message(channel, item) {
     update_icons();
     scrolldown();
   }
+}
+
+function safelink(text) {
+  urlpat = /(https?:\/\/\S+)/;
+  var parts = text.split(urlpat);
+
+  var plaintext = parts.shift();
+  var temp = document.createElement("span");
+  temp.textContent = plaintext;
+  safetext = temp.innerHTML;
+
+  while (parts.length > 0) {
+    var linktext = parts.shift();
+    var temp = document.createElement("a");
+    temp.href = linktext;
+    temp.innerText = linktext;
+    temp.target = "_blank";
+    safetext += temp.outerHTML;
+
+    var plaintext = parts.shift();
+    var temp = document.createElement("span");
+    temp.textContent = plaintext;
+    safetext += temp.innerHTML;
+  }
+
+  return safetext;
 }
 
 function update_icons() {
@@ -566,7 +573,8 @@ function inputfocus() {
           <p class="msgitem">
             <span class="msgtext">
               <strong>{{item.nickname}}:</strong>
-              {{item.message}}
+              <span v-html="item.message"></span>
+              <!-- {{item.message}} -->
             </span>
           </p>
         </div>
@@ -618,6 +626,7 @@ function inputfocus() {
     data: {
       timestampinterval: null,
       checkuserinterval: null,
+      lastwho: moment(),
       state: "login",
       sockstate: "notconnected",
       idkey_state: "hide",
@@ -671,11 +680,6 @@ function inputfocus() {
                           who: "*"};
         this.signsend(payloadobj);
       },
-      send_call: function(youridkey) {
-        var payloadobj = {timestamp: moment().utc().format(),
-                          call: youridkey};
-        this.signsend(payloadobj);
-      },
       changechannel: function (ix) {
         if (document.getSelection().toString() != "") {return;}
 
@@ -723,16 +727,10 @@ function inputfocus() {
           var user = this.users[youridkey];
           if (youridkey != this.idkey_base64) {
             // checking someone else, not me
-            if (now - user.lastseen > 60000) {
-              // no word for 1 minute, they're gone
+            if (now - user.lastseen > 120000) {
+              // no word for 2 minutes, they're gone
               delete this.users[youridkey];
               continue;
-            }
-            else if (now - user.lastcalled > 30000) {
-              // no word for 30 seconds, try calling
-              Vue.nextTick(function () {
-                app.send_call(youridkey);
-              });
             }
           }
 
@@ -748,6 +746,13 @@ function inputfocus() {
 
         this.$forceUpdate();
         update_icons();
+
+        if (moment() - this.lastwho > 60000) {
+          Vue.nextTick(function () {
+            app.send_who();
+          });
+          this.lastwho = moment();
+        }
       },
     },
     created: function () {
