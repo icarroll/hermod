@@ -341,7 +341,7 @@ function connect() {
 
     if (! (encidkey in app.users)) {
       //TODO recognize own idkey (?)
-      app.users[encidkey] = {nickname: "", listening: []};
+      app.users[encidkey] = {nickname: "", listening: [], idle: false};
       app.$forceUpdate();
       update_icons();
     }
@@ -368,7 +368,12 @@ function connect() {
       app.users[encidkey].nickname = payload.nickname;
     }
 
+    if ("idle" in payload) {
+      app.users[encidkey].idle = payload.idle;
+    }
+
     if ("say" in payload) {
+      app.users[encidkey].idle = false;
       for (var channel in payload.say) {
         item = {idkey: encidkey,
                 nickname: app.users[encidkey].nickname,
@@ -588,6 +593,7 @@ function inputfocus() {
       <ul>
         <li v-for="idkey in sorted_channel_users">
           <svg width="32" height="32" v-bind:data-jdenticon-value="idkey"></svg>
+          <img width="18" height="18" v-if="users[idkey].idle" src="zzz.png"/>
           <strong>{{users[idkey].nickname}}</strong>
         </li>
       </ul>
@@ -624,9 +630,11 @@ function inputfocus() {
   var app = new Vue({
     el: '#app',
     data: {
+      idletimeout: 300000,   // 5 minutes in milliseconds
       timestampinterval: null,
       checkuserinterval: null,
       lastwho: moment(),
+      lastsay: moment(),
       state: "login",
       sockstate: "notconnected",
       idkey_state: "hide",
@@ -659,9 +667,11 @@ function inputfocus() {
         this.input = this.input.trim();
         if (this.input === "") {return;}
 
+        this.lastsay = moment();
         var sayobj = {} ; sayobj[this.focuschannel] = this.input;
         var payloadobj = {timestamp: moment().utc().format(),
                           nickname: this.self_user.nickname,
+                          idle: false,
                           say: sayobj};
 
         this.signsend(payloadobj);
@@ -672,6 +682,7 @@ function inputfocus() {
       send_listen: function () {
         var payloadobj = {timestamp: moment().utc().format(),
                           nickname: this.self_user.nickname,
+                          idle: moment() - this.lastsay > this.idletimeout,
                           listen: this.mychannelnames};
         this.signsend(payloadobj);
       },
