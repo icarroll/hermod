@@ -1,7 +1,6 @@
 <html>
 <!--
 TODO:
-auto-reconnect attempt
 hide password button
 tooltips on home and add buttons
 hints for vue for channel join/leave
@@ -306,90 +305,92 @@ function calculate() {
   });
 }
 
-function connect() {
+function process_message(e) {
+  var receive = JSON.parse(e.data);
+
+  if ("advise_disconnect" in receive) {
+    delete app.users[receive.advise_disconnect];
+    app.checkusers(); //TODO only update the one client
+    return;
+  }
+
+  if (! ("idkey" in receive)) {console.log("no idkey"); return;}
+  var encidkey = receive.idkey;
+  var decidkey = decode_base64(encidkey);
+
+  if (! ("payload" in receive)) {console.log("no payload"); return;}
+  var signature = decode_base64(receive.signature);
+  if (! sodium.crypto_sign_verify_detached(signature, receive.payload, decidkey)) {console.log("didn't match") ; return;}
+  var payload = JSON.parse(receive.payload);
+
+  if (! ("timestamp" in payload)) {console.log("no timestamp"); return;}
+  //TODO verify timestamp
+  /*
+  var then_t = moment(payload.timestamp);
+  var now_t = moment().utc();
+  console.log(then_t.format(), now_t.format(), now_t - then_t)
+  */
+
+  if (! (encidkey in app.users)) {
+    //TODO recognize own idkey (?)
+    app.users[encidkey] = {nickname: "", listening: [], idle: false};
+    app.$forceUpdate();
+    update_icons();
+  }
+
+  app.users[encidkey].lastseen = moment();
+
+  if ("who" in payload) {
+    // yes, reply to my own who
+    app.lastwho = moment();
+    Vue.nextTick(function () {
+      console.log("got who, sending listen");
+      app.send_listen();
+    });
+  }
+
+  if ("listen" in payload) {
+    //TODO sanity check payload.listen
+    //TODO update channel member lists
+    app.users[encidkey].listening = payload.listen;
+    app.checkusers(); //TODO only update the one client
+  }
+
+  if ("nickname" in payload) {
+    app.users[encidkey].nickname = payload.nickname;
+  }
+
+  if ("idle" in payload) {
+    app.users[encidkey].idle = payload.idle;
+  }
+
+  if ("say" in payload) {
+    app.users[encidkey].idle = false;
+    for (var channel in payload.say) {
+      item = {idkey: encidkey,
+              nickname: app.users[encidkey].nickname,
+              message: safelink(payload.say[channel]),
+              timestamp: payload.timestamp};
+      post_message(channel, item)
+    }
+  }
+}
+
+function connect(firsttime) {
   // app.websocket = new WebSocket("ws://" + window.location.host + ":8192" + window.location.pathname.substring(0, window.location.pathname.lastIndexOf("/")) + "/chatsock");
   // app.websocket = new WebSocket("ws://" + window.location.host + ":8192" + "/chatsock");
   app.sockstate = "connecting";
 
   app.websocket = new WebSocket("ws://ada.cs.pdx.edu:8192/")
 
-  app.websocket.onmessage = function (e) {
-    var receive = JSON.parse(e.data);
-
-    if ("advise_disconnect" in receive) {
-      delete app.users[receive.advise_disconnect];
-      app.checkusers(); //TODO only update the one client
-      return;
-    }
-
-    if (! ("idkey" in receive)) {console.log("no idkey"); return;}
-    var encidkey = receive.idkey;
-    var decidkey = decode_base64(encidkey);
-
-    if (! ("payload" in receive)) {console.log("no payload"); return;}
-    var signature = decode_base64(receive.signature);
-    if (! sodium.crypto_sign_verify_detached(signature, receive.payload, decidkey)) {console.log("didn't match") ; return;}
-    var payload = JSON.parse(receive.payload);
-
-    if (! ("timestamp" in payload)) {console.log("no timestamp"); return;}
-    //TODO verify timestamp
-    /*
-    var then_t = moment(payload.timestamp);
-    var now_t = moment().utc();
-    console.log(then_t.format(), now_t.format(), now_t - then_t)
-    */
-
-    if (! (encidkey in app.users)) {
-      //TODO recognize own idkey (?)
-      app.users[encidkey] = {nickname: "", listening: [], idle: false};
-      app.$forceUpdate();
-      update_icons();
-    }
-
-    app.users[encidkey].lastseen = moment();
-
-    if ("who" in payload) {
-      // yes, reply to my own who
-      app.lastwho = moment();
-      Vue.nextTick(function () {
-        console.log("got who, sending listen");
-        app.send_listen();
-      });
-    }
-
-    if ("listen" in payload) {
-      //TODO sanity check payload.listen
-      //TODO update channel member lists
-      app.users[encidkey].listening = payload.listen;
-      app.checkusers(); //TODO only update the one client
-    }
-
-    if ("nickname" in payload) {
-      app.users[encidkey].nickname = payload.nickname;
-    }
-
-    if ("idle" in payload) {
-      app.users[encidkey].idle = payload.idle;
-    }
-
-    if ("say" in payload) {
-      app.users[encidkey].idle = false;
-      for (var channel in payload.say) {
-        item = {idkey: encidkey,
-                nickname: app.users[encidkey].nickname,
-                message: safelink(payload.say[channel]),
-                timestamp: payload.timestamp};
-        post_message(channel, item)
-      }
-    }
-  }
+  app.websocket.onmessage = process_message;
 
   app.websocket.onopen = function (e) {
     app.sockstate = "connected";
     app.state="chat";
 
     window.onbeforeunload = function() {return true;};
-    app.join("");
+    if (firsttime) {app.join("");}
     app.send_who();
 
     app.checkusers();
@@ -397,10 +398,8 @@ function connect() {
 
   app.websocket.onclose = function (e) {
     app.sockstate = "notconnected";
-  }
 
-  app.websocket.onerror = function (e) {
-    app.sockstate = "notconnected";
+    setTimeout(() => connect(false), 5000);
   }
 }
 
@@ -541,7 +540,7 @@ function inputfocus() {
       IDKey:
       <svg width="128" height="128" v-bind:data-jdenticon-value="idkey_base64"></svg>
       <br/>
-      <b-button variant="outline-primary" ref="connectbutton" onclick="connect()">Connect with this nickname and IDKey</b-button>
+      <b-button variant="outline-primary" ref="connectbutton" onclick="connect(true)">Connect with this nickname and IDKey</b-button>
       <span class="sockstate" v-bind:style="{color: sockstatecolor}">{{sockstatetext}}</span>
     </b-card>
   </div>
