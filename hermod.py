@@ -78,3 +78,4 @@ except KeyboardInterrupt:
     messageobj = dict(advise_server_quit=True)
     message = json.dumps(messageobj)
     s.send_message_to_all(message)
+    print("server said", message)
