@@ -1,7 +1,6 @@
 <html>
 <!--
 TODO:
-hide password button
 tooltips on home and add buttons
 hints for vue for channel join/leave
 control-enter for newline in chat
@@ -52,8 +51,8 @@ time sync
 </head>
 
 <body>
-
 <div id="app" v-cloak>
+
 <div class="login" v-show="state==='login'">
   <div class="unamepword">
     <b-card title="Hermod chat">
@@ -61,7 +60,10 @@ time sync
         <b-form-input ref="id_salt" v-model="self_user.id_salt" @keyup.enter.native="$refs.password.focus()"></b-form-input>
       </b-input-group>
       <b-input-group prepend="Password:">
-        <b-form-input ref="password" v-model="self_user.password" @keyup.enter.native="$refs.calculatebutton.click()"></b-form-input>
+        <b-form-input ref="password" :type="visiblepassword ? 'text' : 'password'" v-model="self_user.password" @keyup.enter.native="$refs.calculatebutton.click()"></b-form-input>
+        <b-input-group-append onclick="app.toggle_visiblepassword()">
+          <b-button variant="outline"><img width="18" height="18" :src="visiblepassword ? 'eye.svg' : 'eye-off.svg'"/></b-button>
+        </b-input-group-append>
       </b-input-group>
       Your password would take {{crack_time}} to crack.
       <br/>
@@ -160,7 +162,7 @@ time sync
   </div>
   <div class="sockstate" v-bind:style="{color: sockstatecolor}">{{sockstatetext}}</div>
 </div>
-</div>
 
+</div>
 </body>
 </html>

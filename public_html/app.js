@@ -233,6 +233,10 @@ var app = new Vue({
     idkey_state: "hide",
     newdiv_state: "hide",
     websocket: null,
+    visiblepassword: true,
+    toggle_visiblepassword: function () {
+      app.visiblepassword = ! app.visiblepassword;
+    },
     self_user: {
       id_salt: "",
       password: "",
