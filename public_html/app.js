@@ -167,6 +167,9 @@ function post_message(channel, item) {
   ix = app.mychannelnames.indexOf(channel);
   if (ix != -1) {
     app.chatlogs[ix].push(item);
+    while (app.chatlogs[ix].length > 100) {
+      app.chatlogs[ix].shift();
+    }
 
     update_icons();
     scrolldown();
