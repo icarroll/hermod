@@ -12,26 +12,8 @@ import time
 import websocket
 
 nickname = "Jeff Dean Facts Robot"
-idkey,privkey = pysodium.crypto_sign_seed_keypair(pysodium.crypto_generichash(nickname, outlen=32))
+idkey,privkey = pysodium.crypto_sign_seed_keypair(pysodium.crypto_generichash(nickname.encode(), outlen=32))
 idkey_base64 = binascii.b2a_base64(idkey).strip()
-#nickname = "ROBOT " + random.choice(open("/usr/share/dict/words").read().split())
-
-'''
-def try_to_verify(msg_bytes):
-    msg = msg_bytes.decode("utf-8")
-    msgobj = json.loads(msg)
-
-    idkey_base64 = msgobj["idkey"]
-    payload_str = msgobj["payload"]
-    sig_base64 = msgobj["signature"]
-
-    idkey = binascii.a2b_base64(idkey_base64)
-    payload_bytes = payload_str.encode("utf-8")
-    sig = binascii.a2b_base64(sig_base64)
-
-    print("verify is", end=" ")
-    print(pysodium.crypto_sign_verify_detached(sig, payload_bytes, idkey))
-'''
 
 def create_message():
     text = random.choice(open("jeff_dean_facts.txt").readlines()).strip()
