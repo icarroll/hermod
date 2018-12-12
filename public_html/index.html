@@ -1,0 +1,168 @@
+<html>
+<!--
+TODO:
+tooltips on home and add buttons
+hints for vue for channel join/leave
+control-enter for newline in chat
+scroll to bottom on size change
+figure out channel membership for multiple login
+
+verify timestamp
+time sync
+-->
+<head>
+  <title>Hermod Chat</title>
+  <link rel="icon" href="Small_SVG_house_icon.png"/>
+
+  <link type="text/css" rel="stylesheet" href="main.css"/>
+  <link type="text/css" rel="stylesheet" href="bootstrap.min.css"/>
+  <link type="text/css" rel="stylesheet" href="bootstrap-vue.css"/>
+
+  <script src="vue.js"></script>
+  <script src="bootstrap-vue.js"></script>
+
+  <script src="jdenticon.min.js"></script>
+  <script>
+    window.jdenticon_config = {
+      lightness: {
+        color: [0.33, 0.67],
+        grayscale: [0.17, 0.67],
+      },
+      saturation: {
+        color: 1.0,
+        grayscale: 0.0,
+      },
+      backColor: "#ffffff"
+    };
+  </script>
+
+  <script src="sodium.js"></script>
+  <script src="zxcvbn.js"></script>
+
+  <script src="moment.js"></script>
+  <script src="moment-timezone-with-data.js"></script>
+
+  <script src="app.js"></script>
+  <script>
+    window.onload = function (e) {
+      app.$mount(document.getElementById("app"));
+    }
+  </script>
+</head>
+
+<body>
+<div id="app" v-cloak>
+
+<div class="login" v-show="state==='login'">
+  <div class="unamepword">
+    <b-card title="Hermod chat">
+      <b-input-group prepend="Username:">
+        <b-form-input ref="id_salt" v-model="self_user.id_salt" @keyup.enter.native="$refs.password.focus()"></b-form-input>
+      </b-input-group>
+      <b-input-group prepend="Password:">
+        <b-form-input ref="password" :type="visiblepassword ? 'text' : 'password'" v-model="self_user.password" @keyup.enter.native="$refs.calculatebutton.click()"></b-form-input>
+        <b-input-group-append onclick="app.toggle_visiblepassword()">
+          <b-button variant="outline"><img width="18" height="18" :src="visiblepassword ? 'eye.svg' : 'eye-off.svg'"/></b-button>
+        </b-input-group-append>
+      </b-input-group>
+      Your password would take {{crack_time}} to crack.
+      <br/>
+      <b-button variant="outline-primary" ref="calculatebutton" onclick="calculate()">Calculate your IDKey</b-button>
+    </b-card>
+  </div>
+
+  <div class="calculate" v-show="idkey_state==='show'" v-cloak>
+    <b-card>
+      <b-input-group prepend="Nickname:">
+        <b-form-input ref="nickname" v-model="self_user.nickname" @keyup.enter.native="$refs.connectbutton.click()"></b-form-input>
+      </b-input-group>
+      IDKey:
+      <svg width="128" height="128" v-bind:data-jdenticon-value="idkey_base64"></svg>
+      <br/>
+      <b-button variant="outline-primary" ref="connectbutton" onclick="connect(true)">Connect with this nickname and IDKey</b-button>
+      <span class="sockstate" v-bind:style="{color: sockstatecolor}">{{sockstatetext}}</span>
+    </b-card>
+  </div>
+</div>
+
+<div class="chat" v-show="state==='chat'" v-cloak>
+  <div class="navbuttons">
+    <b-button variant="outline-secondary" onclick="app.join('')">
+      <svg class="nob" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 48 48"><path d="M20 40V28h8v12h10V24h6L24 6 4 24h6v16z"/></svg>
+    </b-button>
+    <b-button variant="outline-secondary" onclick="app.shownewdiv()">
+      <svg class="nob" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 48 48"><path d="M38 26H26v12h-4V26H10v-4h12V10h4v12h12v4z"/></svg>
+    </b-button>
+    <div class="newdiv" v-show="newdiv_state==='show'">
+      <b-input style="width: auto;" ref="newname" v-model="newchannelname" placeholder="New channel name" @keyup.enter.native="newchannel()" @keyup.escape.native="hidenewdiv()" v-on:blur.native="hidenewdiv()"></input>
+    </div>
+  </div>
+
+  <div id="logs">
+    <div class="channel" v-for="(chatlog,ix) in chatlogs" v-on:click="changechannel(ix)" v-bind:class="{activechannel: focuschannel===mychannelnames[ix]}">
+      <div class="channelname">
+        <span class="closebtn" v-on:click="leave(mychannelnames[ix], $event)">
+          <svg class="nob" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 48 48"><path d="M38 12.83L35.17 10 24 21.17 12.83 10 10 12.83 21.17 24 10 35.17 12.83 38 24 26.83 35.17 38 38 35.17 26.83 24z"/></svg>
+        </span>
+        <span v-if="mychannelnames[ix]===''">
+          <img width="36" height="36" src="Small_SVG_house_icon.svg"/>
+        </span>
+        <strong style="line-height: 36px;">{{mychannelnames[ix]}}</strong>
+      </div>
+      <div class="chatlog">
+        <div class="msg" v-for="item in chatlog">
+          <svg width="32" height="32" v-bind:data-jdenticon-value="item.idkey"></svg>
+          <span class="timestamp">{{item.timestamp |fromNow}}</span>
+          <p class="msgitem">
+            <span class="msgtext">
+              <strong>{{item.nickname}}:</strong>
+              <span v-html="item.message"></span>
+              <!-- {{item.message}} -->
+            </span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="lists">
+    <strong>Channel Members:</strong>
+    <div id="who">
+      <ul>
+        <li v-for="idkey in sorted_channel_users">
+          <svg width="32" height="32" v-bind:data-jdenticon-value="idkey"></svg>
+          <img width="18" height="18" v-if="users[idkey].idle" src="zzz.png"/>
+          <strong>{{users[idkey].nickname}}</strong>
+        </li>
+      </ul>
+    </div>
+
+    <hr style="width: 100%;" />
+
+    <strong>Active Channels:</strong>
+    <div id="where">
+      <ul class="list-group">
+        <li class="list-group-item" v-for="item in sorted_channels" @click="join(item)">
+          <strong>{{item}}</strong>
+          <span v-if="item===''">
+            <!--
+            <svg class="nob" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 48 48"><path d="M20 40V28h8v12h10V24h6L24 6 4 24h6v16z"/></svg>
+            -->
+            <img width="18" height="18" src="Small_SVG_house_icon.svg"/>
+          </span>
+          <svg class="nob chnadd" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 48 48"><path d="M38 26H26v12h-4V26H10v-4h12V10h4v12h12v4z"/></svg>
+        </li>
+      </ul>
+    </div>
+  </div>
+  <div id="input" class="container-fluid">
+    <svg width="64" height="64" v-bind:data-jdenticon-value="idkey_base64"></svg>
+    <strong>{{self_user.nickname}}:</strong>
+    <b-form-textarea id="input_text" ref="input_text" v-model="input" @keydown.enter.native="send_say"></textarea>
+  </div>
+  <div class="sockstate" v-bind:style="{color: sockstatecolor}">{{sockstatetext}}</div>
+</div>
+
+</div>
+</body>
+</html>
